@@ -1,0 +1,33 @@
+<?php
+
+$args = $argv;
+
+if (count($args) < 2) {
+    $args[] = null;
+}
+
+$flag = $args[1];
+
+if (!$flag) {
+    exit;
+}
+
+require_once __DIR__ . "/vendor/autoload.php";
+
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+switch($flag) {
+    case "-sd":
+        require_once __DIR__ . "/scripts/setup_dev.php";
+        runScript();
+        break;
+    case "-rd":
+        require_once __DIR__ . "/scripts/reset_dev.php";
+        runScript();
+        break;
+    case "-s":
+        require_once __DIR__ . "/scripts/run_dev.php";
+        runScript();
+        break;
+}
