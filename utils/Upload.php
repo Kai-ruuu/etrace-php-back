@@ -57,8 +57,8 @@ class Upload
         $this->finalFilename = self::getUniqueName($this->fileRaw['name']);
         $this->tmpPath = Storage::dest("tmp") . "/" . $this->finalFilename;
 
-        if (!move_uploaded_file($this->file, $this->tmpPath)) {
-            $this->errMsg = "Failed to stage {$this->label}.";
+        if (!copy($this->file, $this->tmpPath)) {
+            $this->errMsg = "Failed to read {$this->label}.";
             return;
         }
 

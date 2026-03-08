@@ -51,6 +51,13 @@ class Course
         $statement->execute([$id]);
         return $statement->fetchAll();
     }
+
+    public function getAllActive()
+    {
+        $statement = $this->pdo->prepare("SELECT * FROM courses WHERE archived = FALSE");
+        $statement->execute();
+        return $statement->fetchAll();
+    }
     
     public function updateById($id, $course)
     {

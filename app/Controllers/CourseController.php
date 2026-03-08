@@ -115,6 +115,12 @@ class CourseController
         Response::json($course);
     }
 
+    public function getAllActive()
+    {
+        $courses = $this->model->getAllActive();
+        Response::json($courses);
+    }
+
     public function getAllUnderDeanSchool()
     {
         $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::READ_COURSES);

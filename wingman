@@ -30,4 +30,8 @@ switch($flag) {
         require_once __DIR__ . "/scripts/run_dev.php";
         runScript();
         break;
+    case "-h":
+        require_once __DIR__ . "/scripts/host_dev.php";
+        runScript();
+        break;
 }

@@ -35,6 +35,22 @@ class UserGuard
                 }
                 
                 return $user;
+            case Role::PSTAFF:
+                $user = $userModel->getPstaffById($id);
+                
+                if ($action !== null) {
+                    Permissions::blockIfExcludes($action, $user, false);
+                }
+                
+                return $user;
+            case Role::COMPANY:
+                $user = $userModel->getCompanyById($id);
+                
+                if ($action !== null) {
+                    Permissions::blockIfExcludes($action, $user, false);
+                }
+                
+                return $user;
         }
     }
 }

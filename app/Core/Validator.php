@@ -13,6 +13,7 @@ class Validator
     public const TEXT = "text";
     public const EMAIL = "email";
     public const BOOLEAN = "boolean";
+    public const ENUM = "enum";
     
     public static function validateInteger($label, $value, $customMsg = null)
     {
@@ -117,6 +118,18 @@ class Validator
 
         return in_array(strtolower($value), $trueVals);
     }
+
+    public static function validateEnum($label, $value, $enum, $customMsg = null)
+    {
+        $msg = $customMsg ?? "{$label} is invalid.";
+
+        if (!in_array($value, $enum)) {
+            Logger::debug(Logger::ERR_VALIDATION, $msg);
+            Response::json(["message" => $msg], 422);
+        }
+
+        return $value;
+    }
             
     public static function batchValidate($info = [])
     {
@@ -130,11 +143,10 @@ class Validator
         $validated = [];
 
         foreach($info as $validation) {
-            if (count($validation) < 4) {
-                $validation[] = null;
-            }
-
-            [$type, $label, $value, $optionalInfo] = $validation;
+            $type = $validation[0];
+            $label = $validation[1];
+            $value = $validation[2];
+            $optionalInfo = $validation[3] ?? null;
             
             switch ($type) {
                 case self::INTEGER:
@@ -152,6 +164,12 @@ class Validator
                 case self::BOOLEAN:
                     $validated[$label] = Validator::validateBoolean($label, $value, $optionalInfo);
                     break;
+                case self::ENUM:
+                    $label = $validation[1];
+                    $value = $validation[2];
+                    $enum = $validation[3];
+                    $optionalInfo = $validation[4] ?? null;
+                    $validated[$label] = Validator::validateEnum($label, $value, $enum, $optionalInfo);
             }
         }
 

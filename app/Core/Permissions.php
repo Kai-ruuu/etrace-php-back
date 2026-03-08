@@ -17,10 +17,13 @@ class Permissions
                 Action::READ_SCHOOLS,
                 Action::READ_DEANS,
                 Action::READ_PSTAFFS,
+                Action::READ_COMPANIES,
+                Action::UPDATE_COMPANY,
                 Action::UPDATE_SCHOOLS,
                 Action::ENDIS_DEANS,
                 Action::ENDIS_PSTAFFS,
-                ],
+                Action::ENDIS_COMPANIES,
+            ],
             "dean" => [
                 Action::CREATE_COURSES,
                 Action::CREATE_RECORDS,
@@ -33,7 +36,22 @@ class Permissions
                 Action::UPDATE_RECORDS,
                 Action::UPDATE_PROFILE,
                 Action::DELETE_ALIGNED_OCCUPATIONS,
-            ]
+            ],
+            "pstaff" => [
+                Action::READ_COURSES,
+                Action::READ_COMPANIES,
+                Action::UPDATE_COMPANY,
+                Action::UPDATE_REQUIREMENT,
+                Action::UPDATE_PROFILE,
+                Action::ENDIS_COMPANIES,
+            ],
+            "company" => [
+                Action::READ_COURSES,
+                Action::UPDATE_REQUIREMENT,
+            ],
+            "alumni" => [
+
+            ],
         ];
 
         if ($user["role"] === Role::SYSAD) {

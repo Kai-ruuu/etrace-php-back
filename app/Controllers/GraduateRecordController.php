@@ -35,23 +35,52 @@ class GraduateRecordController
         $uploads->stage();
         $errs = $uploads->getErrors();
 
-        if (!empty($errs)) {
-            $uploads->rollback();
-            Response::json(["message" => $errs[0]], 422);
-        }
-
-        $uploads->commit();
-
         $cUserProfile = $this->profileModel->getDeanByUserId($cUser["id"]);
         $recordId = $this->model->create([
             "filename" => $uploads->getFilename(0),
             "course_id" => $validatedCourseId,
             "dean_uploader_id" => $cUserProfile["id"]
         ]);
+
+        if (!empty($errs)) {
+            $uploads->rollback();
+            Response::json(["message" => $errs[0]], 422);
+        }
+
+        if ($recordId === null) {
+            $uploads->rollback();
+            Response::json(["message" => "Unable to create graduate record"], 500);
+        }
+
+        $uploads->commit();
+        
         $record = $this->model->getById($recordId);
         Response::json($record, 201);
     }
 
+    public function open($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::READ_RECORDS);
+        $validatedId = Validator::validateInteger("id", $id);
+        $record = $this->model->getById($validatedId);
+
+        if (!$record) {
+            Response::json(["message" => "Record not found"], 404);
+        }
+        
+        $fileName = $record["filename"];
+        $filePath = Storage::dest("graduate_records") . "/" . $fileName;
+
+        if (!file_exists($filePath)) {
+            Response::json(["message" => "Record not found"], 404);
+        }
+
+        Response::json([
+            "filename" => $fileName,
+            "content" => file_get_contents($filePath)
+        ]);
+    }
+    
     public function search()
     {
         $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::READ_RECORDS);

@@ -8,6 +8,7 @@ require_once __DIR__ . "/../Core/Validator.php";
 require_once __DIR__ . "/../Core/Paginator.php";
 require_once __DIR__ . "/../Models/User.php";
 require_once __DIR__ . "/../Middlewares/UserGuard.php";
+require_once __DIR__ . "/../../utils/Upload.php";
 require_once __DIR__ . "/../../utils/Password.php";
 
 class UserController
@@ -360,7 +361,7 @@ class UserController
         $tookEffect = $this->model->updateById($validatedId, $user);
         
         if (!$tookEffect) {
-            Response::json(["message" => "Unable to enable dean."], 500);
+            Response::json(["message" => "Unable to enable peso staff."], 500);
         }    
             
         Response::json([
@@ -383,11 +384,239 @@ class UserController
         $tookEffect = $this->model->updateById($validatedId, $user);
         
         if (!$tookEffect) {
-            Response::json(["message" => "Unable to disable dean."], 500);
+            Response::json(["message" => "Unable to disable peso staff."], 500);
         }    
             
         Response::json([
             "message" => "PESO Staff has been disabled.",
+            "id" => $validatedId,
+        ]);
+    }
+
+    public function createCompany()
+    {
+        $validated = Validator::batchValidate([
+            [Validator::EMAIL, "email", $_POST["email"] ?? "", "1-255"],
+            [Validator::TEXT, "password", $_POST["password"] ?? "", "8-65"],
+            [Validator::TEXT, "name", $_POST["name"] ?? "", "1-255"],
+            [Validator::TEXT, "address", $_POST["address"] ?? "", "1-512"],
+            [Validator::ENUM, "industry", $_POST["industry"] ?? "", [
+                'Technology / IT','Finance / Banking / Insurance','Healthcare / Pharmaceuticals',
+                'Education / Research','Manufacturing / Industrial','Retail / E-commerce',
+                'Food & Beverage / Hospitality','Transportation / Logistics','Energy / Utilities',
+                'Media / Entertainment / Advertising','Government / Public Sector',
+                'Real Estate / Construction','Consulting / Professional Services','Nonprofit / NGO',
+                'Telecommunications'
+            ]],
+        ]);
+        $passwordHash = Password::hash($validated["password"]);
+        
+        $vacancies = json_decode($_POST["vacancies"], true);
+
+        foreach ($vacancies as $vacancy) {
+            $jobTitle = trim($vacancy["job_title"] ?? "");
+            $slots = Validator::validateInteger("slots", $vacancy["slots"]);
+            $qualifications = $vacancy["qualifications"] ?? [];
+            
+            if (empty($jobTitle)) {
+                Response::json(["message" => "A vacancy should have a job title."], 400);
+            }
+            
+            if ($slots <= 0) {
+                Response::json(["message" => "A vacancy should have at least 1 slot open."], 400);
+            }
+                
+            if (empty($qualifications)) {
+                Response::json(["message" => "A vacancy should have at least 1 qualification."], 400);
+            }
+        }
+
+        if ($this->model->getByEmail($validated["email"])) {
+            Response::json(["message" => "Unable to register account."], 409);
+        }
+
+        $uploads = new Uploads([
+            new Upload("Logo", Storage::dest("logo"), "logo", ["image/png", "image/jpeg"]),
+            new Upload("Company Profile", Storage::dest("profile"), "profile", ["application/pdf"]),
+            new Upload("Business Permit", Storage::dest("permit"), "permit", ["application/pdf"]),
+            new Upload("SEC", Storage::dest("sec"), "sec", ["application/pdf"]),
+            new Upload("DTI / CDA Reg.", Storage::dest("dti_cda"), "dti_cda", ["application/pdf"]),
+            new Upload("Registry of Establishment fr. DOLE", Storage::dest("reg_of_est"), "reg_of_est", ["application/pdf"]),
+            new Upload("Phil-JobNet Reg.", Storage::dest("reg_philjobnet"), "reg_philjobnet", ["application/pdf"]),
+            new Upload("Certification from DOLE Provincial Office", Storage::dest("cert_from_dole"), "cert_from_dole", ["application/pdf"]),
+            new Upload("Certification of no Pending Case", Storage::dest("cert_no_case"), "cert_no_case", ["application/pdf"]),
+        ]);
+        $uploads->stage();
+        $errs = $uploads->getErrors();
+
+        if (!empty($errs)) {
+            $uploads->rollback();
+            Response::json(["message" => $errs[0]], 422);
+        }
+
+        $userId = $this->model->createCompany([
+            "email" => $validated["email"],
+            "password_hash" => $passwordHash,
+            "name" => $validated["name"],
+            "address" => $validated["address"],
+            "industry" => $validated["industry"],
+            "req_logo" => $uploads->getFilename(0),
+            "req_company_profile" => $uploads->getFilename(1),
+            "req_business_permit" => $uploads->getFilename(2),
+            "req_sec" => $uploads->getFilename(3),
+            "req_dti_cda" => $uploads->getFilename(4),
+            "req_reg_of_est" => $uploads->getFilename(5),
+            "req_philjobnet_reg" => $uploads->getFilename(6),
+            "req_cert_from_dole" => $uploads->getFilename(7),
+            "req_cert_no_case" => $uploads->getFilename(8),
+            "vacancies" => $vacancies,
+        ]);
+
+        if ($userId === null) {
+            $uploads->rollback();
+            Response::json(["message" => "Unable to register"], 500);
+        }
+
+        $uploads->commit();
+
+        Response::json(["message" => "You are now registered! Welcome to E-trace."], 201);
+    }
+
+    public function searchCompanies()
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::SYSAD, Role::PSTAFF], Action::READ_COMPANIES);
+        $q = Request::fromQuery("q", "");
+        $validated = Validator::batchValidate([
+            [Validator::INTEGER, "page", Request::fromQuery("page", 1)],
+            [Validator::INTEGER, "per_page", Request::fromQuery("per_page", 20)],
+            [Validator::BOOLEAN, "enabled", Request::fromQuery("enabled", true)],
+            [Validator::ENUM, "ver_status", Request::fromQuery("ver_status"), ['Verified', 'Pending', 'Reviewed', 'Rejected']],
+            [Validator::ENUM, "industry", Request::fromQuery("industry"), [
+                'Technology / IT','Finance / Banking / Insurance','Healthcare / Pharmaceuticals',
+                'Education / Research','Manufacturing / Industrial','Retail / E-commerce',
+                'Food & Beverage / Hospitality','Transportation / Logistics','Energy / Utilities',
+                'Media / Entertainment / Advertising','Government / Public Sector',
+                'Real Estate / Construction','Consulting / Professional Services','Nonprofit / NGO',
+                'Telecommunications'
+            ]],
+        ]);
+        $paginator = new Paginator($this->pdo, "users", $validated["page"], $validated["per_page"]);
+        $verStatusWhere = $cUser["role"] === Role::SYSAD
+            ? "AND p.ver_stat_sysad = ?"
+            : "
+                AND p.ver_stat_pstaff = ?
+                AND p.ver_stat_sysad = 'Verified'
+            ";
+        $result = $paginator->run(
+            "SELECT
+                u.id AS uid,
+                u.email AS uemail,
+                u.role AS urole,
+                u.enabled AS uenabled,
+                u.created_at AS ucreated_at,
+                u.updated_at AS uupdated_at,
+                p.id AS pid,
+                p.user_id AS puser_id,
+                p.name AS pname,
+                p.address AS paddress,
+                p.industry AS pindustry,
+                p.req_logo AS preq_logo,
+                p.req_company_profile AS preq_company_profile,
+                p.req_business_permit AS preq_business_permit,
+                p.req_sec AS preq_sec,
+                p.req_dti_cda AS preq_dti_cda,
+                p.req_reg_of_est AS preq_reg_of_est,
+                p.req_cert_from_dole AS preq_cert_from_dole,
+                p.req_cert_no_case AS preq_cert_no_case,
+                p.req_philjobnet_reg AS preq_philjobnet_reg,
+                p.stat_req_logo AS pstat_req_logo,
+                p.stat_req_company_profile AS pstat_req_company_profile,
+                p.stat_req_business_permit AS pstat_req_business_permit,
+                p.stat_req_sec AS pstat_req_sec,
+                p.stat_req_dti_cda AS pstat_req_dti_cda,
+                p.stat_req_reg_of_est AS pstat_req_reg_of_est,
+                p.stat_req_cert_from_dole AS pstat_req_cert_from_dole,
+                p.stat_req_cert_no_case AS pstat_req_cert_no_case,
+                p.stat_req_philjobnet_reg AS pstat_req_philjobnet_reg,
+                p.stat_req_list_of_vacancies AS pstat_req_list_of_vacancies,
+                p.ver_stat_sysad AS pver_stat_sysad,
+                p.ver_stat_pstaff AS pver_stat_pstaff,
+                v.id AS vid,
+                v.job_title AS vjob_title,
+                v.slots AS vslots,
+                v.qualifications AS vqualifications
+            FROM users u
+            JOIN companies p ON p.user_id = u.id
+            LEFT JOIN vacancies v ON v.company_id = p.id
+            ",
+            "WHERE
+                u.role = 'company'
+                AND u.enabled = ?
+                {$verStatusWhere}
+                AND p.industry = ?
+                AND (
+                    u.email LIKE ? OR
+                    p.name LIKE ? OR
+                    p.address LIKE ? OR
+                    p.industry LIKE ?
+                )
+            ",
+            [
+                $validated["enabled"],
+                $validated["ver_status"],
+                $validated["industry"],
+                "%{$q}%",
+                "%{$q}%",
+                "%{$q}%",
+                "%{$q}%"
+            ],
+            [User::class, "format"]
+        );
+        Response::json($result);
+    }
+
+    public function enableCompany($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::SYSAD], Action::ENDIS_COMPANIES);
+        $validatedId = Validator::validateInteger("id", $id);
+        $user = $this->model->getById($validatedId);
+
+        if (!$user) {
+            Response::json(["message" => "Company does not exist."], 404);
+        }
+
+        $user["enabled"] = true;
+        $tookEffect = $this->model->updateById($validatedId, $user);
+        
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to enable company."], 500);
+        }    
+            
+        Response::json([
+            "message" => "Company has been enabled.",
+            "id" => $validatedId,
+        ]);
+    }
+
+    public function disableCompany($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::SYSAD], Action::ENDIS_COMPANIES);
+        $validatedId = Validator::validateInteger("id", $id);
+        $user = $this->model->getById($validatedId);
+
+        if (!$user) {
+            Response::json(["message" => "Company does not exist."], 404);
+        }
+
+        $user["enabled"] = false;
+        $tookEffect = $this->model->updateById($validatedId, $user);
+        
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to disable company."], 500);
+        }    
+            
+        Response::json([
+            "message" => "Company has been disabled.",
             "id" => $validatedId,
         ]);
     }

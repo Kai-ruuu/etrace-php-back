@@ -25,9 +25,9 @@ class AuthController
             case Role::DEAN:
                 return $this->model->getDeanById($user["id"]);
             case Role::PSTAFF:
-                break;
+                return $this->model->getPstaffById($user["id"]);
             case Role::COMPANY:
-                break;
+                return $this->model->getCompanyById($user["id"]);
             case Role::ALUMNI:
                 break;
         }

@@ -103,19 +103,18 @@ function createTables($pdo)
         req_cert_from_dole VARCHAR(255) NOT NULL,
         req_cert_no_case VARCHAR(255) NOT NULL,
         req_philjobnet_reg VARCHAR(255) NOT NULL,
-        req_list_of_vacancies VARCHAR(255) NOT NULL,
-        stat_req_logo ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_company_profile ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_business_permit ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_sec ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_dti_cda ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_reg_of_est ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_cert_from_dole ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_cert_no_case ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_philjobnet_reg ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        stat_req_list_of_vacancies ENUM('Pending', 'Approved','For Resubmission') DEFAULT 'Pending',
-        ver_stat_sysad ENUM('Verified','Pending','Reviewed','Rejected') DEFAULT 'Pending',
-        ver_stat_pstaff ENUM('Verified','Pending','Reviewed','Rejected') DEFAULT 'Pending',
+        stat_req_logo ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_company_profile ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_business_permit ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_sec ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_dti_cda ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_reg_of_est ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_cert_from_dole ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_cert_no_case ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_philjobnet_reg ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        stat_req_list_of_vacancies ENUM('Pending', 'Approved','For Revision') DEFAULT 'Pending',
+        ver_stat_sysad ENUM('Verified','Pending','Rejected') DEFAULT 'Pending',
+        ver_stat_pstaff ENUM('Verified','Pending','Rejected') DEFAULT 'Pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -145,6 +144,19 @@ function createTables($pdo)
         file_cv VARCHAR(255) NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
+    );
+    ";
+
+    $tables[] = "CREATE TABLE IF NOT EXISTS vacancies(
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        job_title VARCHAR(255) NOT NULL,
+        slots INT NOT NULL,
+        qualifications JSON NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        UNIQUE(company_id, job_title)
     );
     ";
 
@@ -212,36 +224,54 @@ function createTables($pdo)
     );
     ";
 
-    $tables[] = "CREATE TABLE IF NOT EXISTS company_review_messages(
+    $tables[] = "CREATE TABLE IF NOT EXISTS company_revision_messages(
         id INT AUTO_INCREMENT PRIMARY KEY,
         company_id INT NOT NULL,
-        sysad_id INT,
-        pstaff_id INT,
-        result ENUM(
-            'Verified',
-            'Reviewed',
-            'Rejected'
-        ) DEFAULT 'Reviewed',
-        message TEXT DEFAULT NULL,
+        pstaff_id INT NOT NULL,
+        message TEXT NOT NULL,
+        requirement_name VARCHAR(65) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY (pstaff_id) REFERENCES pstaffs(id) ON DELETE CASCADE
+    );
+    ";
+
+    $tables[] = "CREATE TABLE IF NOT EXISTS company_revision_appeals(
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        company_id INT NOT NULL,
+        resubmit_id INT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        FOREIGN KEY (resubmit_id) REFERENCES company_revision_messages(id) ON DELETE CASCADE
+    );
+    ";
+
+    $tables[] = "CREATE TABLE IF NOT EXISTS company_rejection_messages(
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sysad_id INT,
+        pstaff_id INT,
+        company_id INT NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (sysad_id) REFERENCES sysads(id) ON DELETE CASCADE,
         FOREIGN KEY (pstaff_id) REFERENCES pstaffs(id) ON DELETE CASCADE,
-        CONSTRAINT check_reviewer CHECK (
-            (sysad_id IS NOT NULL AND pstaff_id IS NULL) OR
-            (sysad_id IS NULL AND pstaff_id IS NOT NULL)
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+        CHECK (
+            (sysad_id IS NOT NULL AND pstaff_id IS NULL)
+            OR (pstaff_id IS NOT NULL AND sysad_id IS NULL)
         )
     );
     ";
 
-    $tables[] = "CREATE TABLE IF NOT EXISTS company_appeals(
+    $tables[] = "CREATE TABLE IF NOT EXISTS company_rejection_appeals(
         id INT AUTO_INCREMENT PRIMARY KEY,
-        review_message_id INT NOT NULL,
-        user_id INT NOT NULL,
-        message TEXT DEFAULT NULL,
+        company_id INT NOT NULL,
+        rejection_id INT NOT NULL,
+        message TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (review_message_id) REFERENCES company_review_messages(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (rejection_id) REFERENCES company_rejection_messages(id) ON DELETE CASCADE,
+        FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
     );
     ";
 
@@ -277,7 +307,7 @@ function createTables($pdo)
         company_id INT NOT NULL,
         position VARCHAR(255) NOT NULL,
         description TEXT NOT NULL,
-        requirements TEXT NOT NULL,
+        qualifications JSON NOT NULL,
         address VARCHAR(512) NOT NULL,
         salary_min INT NOT NULL,
         salary_max INT NOT NULL,
@@ -302,11 +332,21 @@ function createTables($pdo)
         slots INT NOT NULL,
         additional_info TEXT DEFAULT NULL,
         open_until DATE NOT NULL,
-        active BOOLEAN DEFAULT FALSE,
+        active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
         CONSTRAINT salary_check CHECK(salary_min <= salary_max)
+    );
+    ";
+
+    $tables[] = "CREATE TABLE IF NOT EXISTS job_post_courses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        job_post_id INT NOT NULL,
+        course_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (job_post_id) REFERENCES job_posts(id) ON DELETE CASCADE,
+        FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
     );
     ";
 
@@ -523,13 +563,14 @@ function seedDefaultOccupations($pdo, $total)
     $existing = 0;
     
     for ($i = 0; $i < $total; $i++) {
-        $occupation = "Occupation " . $i + 1;
+        $occupation = "Occupation " . ($i + 1);
 
         $statement = $pdo->prepare("SELECT * FROM occupations WHERE occupation = ?");
         $statement->execute([$occupation]);
         
-        if (!$statement->fetch()) {
+        if ($statement->fetch()) {
             $existing++;
+            continue;
         }
         
         $statement = $pdo->prepare("INSERT INTO occupations (occupation) VALUES (?)");

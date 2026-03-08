@@ -21,6 +21,8 @@ class Action
     public const READ_OCCUPATIONS = "READ_OCCUPATIONS";
     public const READ_ALIGNED_OCCUPATIONS = "read_aligned_occupations";
 
+    public const UPDATE_COMPANY = "update_company";
+    public const UPDATE_REQUIREMENT = "UPDATE_REQUIREMENT";
     public const UPDATE_SCHOOLS = "update_schools";
     public const UPDATE_COURSES = "update_courses";
     public const UPDATE_RECORDS = "update_records";
@@ -29,6 +31,8 @@ class Action
     public const ENDIS_SYSADS = "endis_sysads";
     public const ENDIS_DEANS = "endis_deans";
     public const ENDIS_PSTAFFS = "endis_pstaffs";
+    public const ENDIS_COMPANIES = "endis_companies";
+    public const ENDIS_ALUMNI = "endis_alumni";
 
     public const DELETE_ALIGNED_OCCUPATIONS = "delete_aligned_occupations";
 }

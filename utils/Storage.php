@@ -8,11 +8,20 @@ class Storage
     static $subdirs = [
         "tmp"              => "/tmp",
         "graduate_records" => "/dean/graduate_records",
+        "logo" => "/company/logo",
+        "profile" => "/company/profile",
+        "permit" => "/company/permit",
+        "sec" => "/company/sec",
+        "dti_cda" => "/company/dti_cda",
+        "reg_of_est" => "/company/reg_of_est",
+        "reg_philjobnet" => "/company/reg_philjobnet",
+        "cert_from_dole" => "/company/cert_from_dole",
+        "cert_no_case" => "/company/cert_no_case",
     ];
 
     public static function dest($dirkey)
     {
-        return self::$uploadsDir . "/" . self::$subdirs[$dirkey];
+        return self::$uploadsDir . self::$subdirs[$dirkey];
     }
     
     public static function set()
@@ -37,10 +46,9 @@ class Storage
 
     public static function delete($sourceDir, $file)
     {
-        $dir = self::$uploadsDir . $sourceDir;
-        $filePath = $dir . "/" . $file;
+        $filePath = $sourceDir . "/" . $file;
 
-        if (!is_dir($dir)) {
+        if (!is_dir($sourceDir)) {
             Logger::error(Logger::ERR_FILE_SYSTEM, "Directory {$dir} does not exist.");
             return false;
         }
