@@ -10,7 +10,7 @@ class AuthGuard
         $token = $_COOKIE["token"] ?? null;
 
         if (!$token) {
-            Response::json(["message" => "Not authenticated."], 401);
+            Response::json(["message" => "Not authenticated. Please login."], 401);
         }
             
         $result = AuthToken::decode($token);

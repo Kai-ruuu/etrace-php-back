@@ -137,11 +137,11 @@ function createTables($pdo)
         civil_status ENUM('Single','Married','Widowed','Separated') DEFAULT 'Single',
         address VARCHAR(512) NOT NULL,
         employment_status ENUM('Unemployed','Employed','Self-employed') DEFAULT 'Unemployed',
+        file_profile_picture VARCHAR(255) NOT NULL,
+        file_cv VARCHAR(255) NOT NULL,
         ver_stat_dean ENUM('Verified','Pending','Reviewed','Rejected') DEFAULT 'Pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        file_profile_picture VARCHAR(255) NOT NULL,
-        file_cv VARCHAR(255) NOT NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
     );
@@ -275,15 +275,10 @@ function createTables($pdo)
     );
     ";
 
-    $tables[] = "CREATE TABLE IF NOT EXISTS alumni_review_messages(
+    $tables[] = "CREATE TABLE IF NOT EXISTS alumni_rejection_messages(
         id INT AUTO_INCREMENT PRIMARY KEY,
-        alumni_id INT NOT NULL,
         dean_id INT NOT NULL,
-        result ENUM(
-            'Verified',
-            'Reviewed',
-            'Rejected'
-        ) DEFAULT 'Reviewed',
+        alumni_id INT NOT NULL,
         message TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (alumni_id) REFERENCES alumni(id) ON DELETE CASCADE,
@@ -291,14 +286,14 @@ function createTables($pdo)
     );
     ";
 
-    $tables[] = "CREATE TABLE IF NOT EXISTS alumni_appeals(
+    $tables[] = "CREATE TABLE IF NOT EXISTS alumni_rejection_appeals(
         id INT AUTO_INCREMENT PRIMARY KEY,
-        review_message_id INT NOT NULL,
-        user_id INT NOT NULL,
+        alumni_id INT NOT NULL,
+        rejection_id INT NOT NULL,
         message TEXT DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (review_message_id) REFERENCES alumni_review_messages(id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        FOREIGN KEY (rejection_id) REFERENCES alumni_rejection_messages(id) ON DELETE CASCADE,
+        FOREIGN KEY (alumni_id) REFERENCES alumni(id) ON DELETE CASCADE
     );
     ";
 

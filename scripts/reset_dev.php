@@ -11,9 +11,9 @@ function runScript()
 
     $tables = [
         "alumni",
+        "alumni_rejection_appeals",
+        "alumni_rejection_messages",
         "vacancies",
-        "alumni_appeals",
-        "alumni_review_messages",
         "companies",
         "company_revision_messages",
         "company_revision_appeals",

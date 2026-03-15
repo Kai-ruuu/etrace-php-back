@@ -19,10 +19,19 @@ class GraduateRecordController
     public function create()
     {
         $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::CREATE_RECORDS);
-        $validatedCourseId = Validator::validateInteger("course_id", $_POST["course_id"]);
+        $validatedCourseId = Validator::validateInteger("course id", $_POST["course_id"]);
+        $validatedGraduationYear = Validator::validateInteger("graduation year", $_POST["graduation_year"]);
 
         if (!$this->courseModel->getById($validatedCourseId)) {
             Response::json(["message" => "Course not found."], 404);
+        }
+
+        if ($validatedGraduationYear > date("Y")) {
+            Response::json("Graduation year is in the future.", 400);
+        }
+
+        if ($validatedGraduationYear < 2007) {
+            Response::json("Graduation year must be 2007 or later.", 400);
         }
 
         // validate formatting and data first
@@ -35,19 +44,20 @@ class GraduateRecordController
         $uploads->stage();
         $errs = $uploads->getErrors();
 
-        $cUserProfile = $this->profileModel->getDeanByUserId($cUser["id"]);
-        $recordId = $this->model->create([
-            "filename" => $uploads->getFilename(0),
-            "course_id" => $validatedCourseId,
-            "dean_uploader_id" => $cUserProfile["id"]
-        ]);
-
         if (!empty($errs)) {
             $uploads->rollback();
             Response::json(["message" => $errs[0]], 422);
         }
 
-        if ($recordId === null) {
+        $cUserProfile = $this->profileModel->getDeanByUserId($cUser["id"]);
+        $recordId = $this->model->create([
+            "filename" => $uploads->getFilename(0),
+            "course_id" => $validatedCourseId,
+            "dean_uploader_id" => $cUserProfile["id"],
+            "graduation_year" => $validatedGraduationYear
+        ]);
+
+        if (!$recordId) {
             $uploads->rollback();
             Response::json(["message" => "Unable to create graduate record"], 500);
         }
@@ -80,6 +90,35 @@ class GraduateRecordController
             "content" => file_get_contents($filePath)
         ]);
     }
+
+    public function findRecordForAlumni()
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::READ_RECORDS);
+        $courseId = Validator::validateInteger("course id", Request::fromQuery("course_id"));
+        $yearGraduated = Validator::validateInteger("year graduated", Request::fromQuery("year_graduated"));
+        
+        if (!$this->courseModel->getById($courseId)) {
+            Response::json(["message" => "Course not found."], 404);
+        }
+
+        $record = $this->model->getByCourseIdAndYear($courseId, $yearGraduated);
+        
+        if (!$record) {
+            Response::json(["message" => "Record not found."], 404);
+        }
+        
+        $fileName = $record["filename"];
+        $filePath = Storage::dest("graduate_records") . "/" . $fileName;
+
+        if (!file_exists($filePath)) {
+            Response::json(["message" => "Record not found"], 404);
+        }
+
+        Response::json([
+            "filename" => $fileName,
+            "content" => file_get_contents($filePath)
+        ]);
+    }
     
     public function search()
     {
@@ -98,6 +137,7 @@ class GraduateRecordController
                 gr.id AS grid,
                 gr.filename AS grfilename,
                 gr.course_id AS grcourse_id,
+                gr.graduation_year AS grgraduation_year,
                 gr.archived AS grarchived,
                 gr.dean_uploader_id AS grdean_uploader_id,
                 gr.created_at AS grcreated_at,
@@ -110,11 +150,14 @@ class GraduateRecordController
             JOIN courses c ON gr.course_id = c.id
             JOIN deans d ON gr.dean_uploader_id = d.id",
             "WHERE
-                gr.archived = ?
-                AND gr.course_id = ?
-                AND gr.filename LIKE ?
+                gr.archived = ? AND
+                gr.course_id = ? AND
+                (
+                    gr.filename LIKE ? OR
+                    gr.graduation_year LIKE ?
+                )
             ",
-            [$validated["archived"], $validated["course_id"], "%{$q}%"],
+            [$validated["archived"], $validated["course_id"], "%{$q}%", "%{$q}%"],
             [GraduateRecord::class, "format"]
         );
         Response::json($result);

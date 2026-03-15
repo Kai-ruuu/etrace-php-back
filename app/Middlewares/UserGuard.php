@@ -51,6 +51,14 @@ class UserGuard
                 }
                 
                 return $user;
+            case Role::ALUMNI:
+                $user = $userModel->getAlumniById($id);
+
+                if ($action !== null) {
+                    Permissions::blockIfExcludes($action, $user, false);
+                }
+                
+                return $user;
         }
     }
 }

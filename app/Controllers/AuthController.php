@@ -29,7 +29,7 @@ class AuthController
             case Role::COMPANY:
                 return $this->model->getCompanyById($user["id"]);
             case Role::ALUMNI:
-                break;
+                return $this->model->getAlumniById($user["id"]);
         }
     }
     

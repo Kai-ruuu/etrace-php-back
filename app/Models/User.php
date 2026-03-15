@@ -327,7 +327,7 @@ class User
             WHERE u.id = ? AND u.role = 'company'
         ");
         $statement->execute([$id]);
-        $rows = $statement->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $statement->fetchAll();
 
         if (empty($rows)) {
             return null;
@@ -344,6 +344,208 @@ class User
                     "slots"          => $row["vslots"],
                     "qualifications" => $row["vqualifications"],
                 ];
+            }
+        }
+
+        return self::format($user);
+    }
+
+    public function createAlumni($alumni)
+    {
+        $email = $alumni["email"];
+        $passwordHash = $alumni["password_hash"];
+        $lastName = $alumni["last_name"];
+        $middleName = $alumni["middle_name"];
+        $firstName = $alumni["first_name"];
+        $nameExtension = $alumni["name_extension"];
+        $birthDate = $alumni["birth_date"];
+        $birthPlace = $alumni["birth_place"];
+        $gender = $alumni["gender"];
+        $civilStatus = $alumni["civil_status"];
+        $phoneNumber = $alumni["phone_number"];
+        $address = $alumni["address"];
+        $courseId = $alumni["course_id"];
+        $studentNumber = $alumni["student_number"];
+        $graduationYear = $alumni["graduation_year"];
+        $employmentStatus = $alumni["employment_status"];
+        $socials = $alumni["socials"];
+        $occupations = $alumni["occupations"];
+        $fileProfilePicture = $alumni["file_profile_picture"];
+        $fileCv = $alumni["file_cv"];
+
+        try {
+            $this->pdo->beginTransaction();
+
+            // create user
+            $this->pdo->prepare("INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)")
+            ->execute([$email, $passwordHash, 'alumni']);
+
+            $userId = $this->pdo->lastInsertId();
+
+            // create profile
+            $this->pdo->prepare("INSERT INTO alumni (
+                user_id,
+                name_extension,
+                first_name,
+                middle_name,
+                last_name,
+                birth_date,
+                birth_place,
+                gender,
+                student_number,
+                phone_number,
+                course_id,
+                civil_status,
+                address,
+                employment_status,
+                file_profile_picture,
+                file_cv,
+                graduation_year
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+            ->execute([
+                $userId, $nameExtension, $firstName, $middleName,
+                $lastName, $birthDate->format('Y-m-d'), $birthPlace, $gender, $studentNumber,
+                $phoneNumber, $courseId, $civilStatus, $address,
+                $employmentStatus, $fileProfilePicture, $fileCv,
+                $graduationYear
+            ]);
+
+            $alumniId = $this->pdo->lastInsertId();
+
+            // create occupations
+            foreach ($occupations as $occupation) {
+                $this->pdo->prepare("INSERT IGNORE INTO occupations (occupation) VALUES (?)")
+                ->execute([$occupation["occupation"]]);
+                
+                $stmt = $this->pdo->prepare("SELECT id FROM occupations WHERE occupation = ?");
+                $stmt->execute([$occupation['occupation']]);
+                $occupationId = $stmt->fetchColumn();
+
+                $this->pdo->prepare("INSERT INTO occupation_statuses (
+                    alumni_id,
+                    occupation_id,
+                    address,
+                    is_current
+                ) VALUES (?, ?, ?, ?)")
+                ->execute([$alumniId, $occupationId, $occupation["address"], $occupation["is_current"]]);
+            }
+
+            // create socials
+            foreach ($socials as $social) {
+                $this->pdo->prepare("INSERT IGNORE INTO platforms (name) VALUES (?)")
+                ->execute([$social["platform"]]);
+
+                $stmt = $this->pdo->prepare("SELECT id FROM platforms WHERE name = ?");
+                $stmt->execute([$social['platform']]);
+                $platformId = $stmt->fetchColumn();
+
+                $this->pdo->prepare("INSERT INTO socials (alumni_id, platform_id, url) VALUES (?, ?, ?)")
+                ->execute([$alumniId, $platformId, $social["url"]]);
+            }
+            
+            $this->pdo->commit();
+            return $userId;
+        } catch (PDOException $e) {
+            $this->pdo->rollback();
+            error_log($e->getMessage());
+            return null;
+        }
+    }
+
+    public function getAlumniById($id)
+    {
+        $statement = $this->pdo->prepare("
+            SELECT
+                u.id AS uid,
+                u.email AS uemail,
+                u.role AS urole,
+                u.enabled AS uenabled,
+                u.created_at AS ucreated_at,
+                u.updated_at AS uupdated_at,
+                p.id AS pid,
+                p.user_id AS puser_id,
+                p.name_extension AS pname_extension,
+                p.first_name AS pfirst_name,
+                p.middle_name AS pmiddle_name,
+                p.last_name AS plast_name,
+                p.birth_date AS pbirth_date,
+                p.birth_place AS pbirth_place,
+                p.gender AS pgender,
+                p.student_number AS pstudent_number,
+                p.graduation_year AS pgraduation_year,
+                p.phone_number AS pphone_number,
+                p.course_id AS pcourse_id,
+                p.civil_status AS pcivil_status,
+                p.address AS paddress,
+                p.employment_status AS pemployment_status,
+                p.file_profile_picture AS pfile_profile_picture,
+                p.file_cv AS pfile_cv,
+                p.ver_stat_dean AS pver_stat_dean,
+                p.created_at AS pcreated_at,
+                p.updated_at AS pupdated_at,
+                c.id AS cid,
+                c.school_id AS cschool_id,
+                c.name AS cname,
+                c.code AS ccode,
+                os.id AS osid,
+                os.alumni_id AS osalumni_id,
+                os.occupation_id AS osoccupation_id,
+                os.address AS osaddress,
+                os.is_current AS osis_current,
+                o.occupation AS ooccupation,
+                s.id AS sid,
+                s.alumni_id AS salumni_id,
+                s.platform_id AS splatform_id,
+                s.url AS surl,
+                pl.name AS plname
+            FROM users u
+            JOIN alumni p ON p.user_id = u.id
+            JOIN courses c ON c.id = p.course_id
+            LEFT JOIN occupation_statuses os ON os.alumni_id = p.id
+            JOIN occupations o ON o.id = os.occupation_id
+            LEFT JOIN socials s ON s.alumni_id = p.id
+            JOIN platforms pl ON pl.id = s.platform_id
+            WHERE u.id = ? AND u.role = 'alumni'
+        ");
+        $statement->execute([$id]);
+        $rows = $statement->fetchAll();
+
+        if (empty($rows)) {
+            return null;
+        }
+
+        $user = $rows[0];
+        $user["occupations"] = [];
+        $user["socials"] = [];
+
+        foreach ($rows as $row) {
+            if (!empty($row["osid"])) {
+                $occ = [
+                    "id"             => $row["osid"],
+                    "alumni_id"      => $row["osalumni_id"],
+                    "occupation_id"  => $row["osoccupation_id"],
+                    "address"        => $row["osaddress"],
+                    "is_current"     => $row["osis_current"],
+                    "occupation"     => $row["ooccupation"],
+                ];
+                
+                if (!in_array($occ, $user["occupations"])) {
+                    $user["occupations"][] = $occ;
+                }
+            }
+
+            if (!empty($row["sid"])) {
+                $soc = [
+                    "id"             => $row["sid"],
+                    "alumni_id"      => $row["salumni_id"],
+                    "platform_id"    => $row["splatform_id"],
+                    "url"            => $row["surl"],
+                    "platform"       => $row["plname"],
+                ];
+
+                if (!in_array($soc, $user["socials"])) {
+                    $user["socials"][] = $soc;
+                }
             }
         }
 
@@ -439,6 +641,45 @@ class User
                         "ver_stat_sysad" => $user["pver_stat_sysad"],
                         "ver_stat_pstaff" => $user["pver_stat_pstaff"],
                         "vacancies" => $user["vacancies"]
+                    ]
+                ];
+            case Role::ALUMNI:
+                return [
+                    "id" => $user["uid"],
+                    "email" => $user["uemail"],
+                    "role" => $user["urole"],
+                    "enabled" => $user["uenabled"],
+                    "created_at" => $user["ucreated_at"],
+                    "updated_at" => $user["uupdated_at"],
+                    "profile" => [
+                        "id" => $user["pid"],
+                        "user_id" => $user["puser_id"],
+                        "name_extension" => $user["pname_extension"],
+                        "first_name" => $user["pfirst_name"],
+                        "middle_name" => $user["pmiddle_name"],
+                        "last_name" => $user["plast_name"],
+                        "birth_date" => $user["pbirth_date"],
+                        "birth_place" => $user["pbirth_place"],
+                        "gender" => $user["pgender"],
+                        "student_number" => $user["pstudent_number"],
+                        "graduation_year" => $user["pgraduation_year"],
+                        "phone_number" => $user["pphone_number"],
+                        "course" => [
+                            "id" => $user["cid"],
+                            "school_id" => $user["cschool_id"],
+                            "name" => $user["cname"],
+                            "code" => $user["ccode"],
+                        ],
+                        "civil_status" =>  $user["pcivil_status"],
+                        "address" =>  $user["paddress"],
+                        "employment_status" =>  $user["pemployment_status"],
+                        "file_profile_picture" =>  $user["pfile_profile_picture"],
+                        "file_cv" =>  $user["pfile_cv"],
+                        "ver_stat_dean" =>  $user["pver_stat_dean"],
+                        "created_at" =>  $user["pcreated_at"],
+                        "updated_at" =>  $user["pupdated_at"],
+                        "occupations" => $user["occupations"],
+                        "socials" => $user["socials"],
                     ]
                 ];
         }

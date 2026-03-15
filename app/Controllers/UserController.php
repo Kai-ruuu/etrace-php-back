@@ -490,7 +490,7 @@ class UserController
             [Validator::INTEGER, "page", Request::fromQuery("page", 1)],
             [Validator::INTEGER, "per_page", Request::fromQuery("per_page", 20)],
             [Validator::BOOLEAN, "enabled", Request::fromQuery("enabled", true)],
-            [Validator::ENUM, "ver_status", Request::fromQuery("ver_status"), ['Verified', 'Pending', 'Reviewed', 'Rejected']],
+            [Validator::ENUM, "ver_status", Request::fromQuery("ver_status"), ['Verified', 'Pending', 'Rejected']],
             [Validator::ENUM, "industry", Request::fromQuery("industry"), [
                 'Technology / IT','Finance / Banking / Insurance','Healthcare / Pharmaceuticals',
                 'Education / Research','Manufacturing / Industrial','Retail / E-commerce',
@@ -657,5 +657,240 @@ class UserController
             "message" => "Password has been updated.",
             "id" => $fullCUserr["id"],
         ]);
+    }
+
+    public function createAlumni()
+    {
+        $validated = Validator::batchValidate([
+            [Validator::TEXT, "last name", $_POST["last_name"] ?? "", "1-50"],
+            [Validator::TEXT, "middle name", $_POST["middle_name"] ?? "", "0-50"],
+            [Validator::TEXT, "first name", $_POST["first_name"] ?? "", "1-50"],
+            [Validator::TEXT, "name extension", $_POST["name_extension"] ?? "", "0-10"],
+            [Validator::TEXT, "birth place", $_POST["birth_place"] ?? "", "1-512"],
+            [Validator::ENUM, "gender", $_POST["gender"] ?? "", ["Male", "Female"]],
+            [Validator::ENUM, "civil status", $_POST["civil_status"] ?? "", ["Single","Married","Widowed","Separated"]],
+            [Validator::TEXT, "phone number", $_POST["phone_number"] ?? "", "1-25"],
+            [Validator::TEXT, "address", $_POST["address"] ?? "", "1-512"],
+            [Validator::INTEGER, "course id", $_POST["course_id"] ?? 0],
+            [Validator::TEXT, "student number", $_POST["student_number"] ?? "", "0-255"],
+            [Validator::INTEGER, "graduation year", $_POST["graduation_year"] ?? (int) date("Y")],
+            [Validator::ENUM, "employment status", $_POST["employment_status"] ?? "", ["Unemployed","Employed","Self-employed"]],
+            [Validator::TEXT, "password", $_POST["password"] ?? "", "8-65"],
+            [Validator::EMAIL, "email", $_POST["email"] ?? "", "1-255"],
+        ]);
+        
+        // validate birth date
+        $birthDate = $_POST["birth_date"] ?? "";
+
+        if (strlen($birthDate) === 0) {
+            Response::json(["message" => "Birth date is required."], 400);
+        }
+
+        $birthDate = new DateTime($birthDate);
+        $minDate = new DateTime();
+        $minDate->modify("-21 years");
+
+        if ($birthDate > $minDate) {
+            Response::json("Alumni must be at least 21 years old.");
+        }
+
+        $graduationYear = $validated["graduation year"];
+
+        if ($graduationYear > date("Y")) {
+            Response::json("Graduation year is in the future.", 400);
+        }
+
+        if ($graduationYear < 2007) {
+            Response::json("Graduation year must be 2007 or later.", 400);
+        }
+        
+        // extract occupations
+        $initialOccupations = json_decode($_POST["occupations"], true);
+        $occupations = [];
+
+        foreach($initialOccupations as $occu) {
+            $occupation = Validator::validateText("occupation", $occu["occupation"], "1-255");
+            $address = Validator::validateText("address", trim($occu["address"] ?? ""), "1-512");
+            $isCurrent = Validator::validateBoolean("is current", $occu["is_current"]);
+            $occupations[] = ["occupation" => $occupation, "address" => $address, "is_current" => $isCurrent];
+        }
+        
+        // extract socials
+        $initialSocials = json_decode($_POST["socials"], true);
+        $socials = [];
+        
+        foreach($initialSocials as $social) {
+            $platform = Validator::validateText("platform", trim($social["platform"] ?? ""), "1-50");
+            $url = Validator::validateText("url", trim($social["url"] ?? ""), "1-0");
+            $socials[] = ["platform" => $platform, "url" => $url];
+        }
+
+        // stage files
+        $uploads = new Uploads([
+            new Upload("Profile Picture", Storage::dest("profile_picture"), "file_profile_picture", ["image/png", "image/jpeg"]),
+            new Upload("Curriculum Vitae", Storage::dest("cv"), "file_cv", ["application/pdf"]),
+        ]);
+        $uploads->stage();
+        $errs = $uploads->getErrors();
+
+        if (!empty($errs)) {
+            $uploads->rollback();
+            Response::json(["message" => $errs[0]], 422);
+        }
+
+        // create user
+        $passwordHash = Password::hash($validated["password"]);
+        
+        $userId = $this->model->createAlumni([
+            "email" => $validated["email"],
+            "password_hash" => $passwordHash,
+            "last_name" => $validated["last name"],
+            "middle_name" => $validated["middle name"],
+            "first_name" => $validated["first name"],
+            "name_extension" => $validated["name extension"],
+            "birth_date" => $birthDate,
+            "birth_place" => $validated["birth place"],
+            "gender" => $validated["gender"],
+            "civil_status" => $validated["civil status"],
+            "phone_number" => $validated["phone number"],
+            "address" => $validated["address"],
+            "course_id" => $validated["course id"],
+            "student_number" => $validated["student number"],
+            "graduation_year" => $graduationYear,
+            "employment_status" => $validated["employment status"],
+            "socials" => $socials,
+            "occupations" => $occupations,
+            "file_profile_picture" => $uploads->getFilename(0),
+            "file_cv" => $uploads->getFilename(1),
+        ]);
+
+        if ($userId === null) {
+            $uploads->rollback();
+            Response::json(["message" => "Unable to register"], 500);
+        }
+
+        $uploads->commit();
+
+        Response::json(["message" => "You are now registered! Welcome to E-trace."], 201);
+    }
+
+    public function searchAlumni()
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::READ_ALUMNI);
+        $q = Request::fromQuery("q", "");
+        $validated = Validator::batchValidate([
+            [Validator::INTEGER, "page", Request::fromQuery("page", 1)],
+            [Validator::INTEGER, "per_page", Request::fromQuery("per_page", 20)],
+            [Validator::INTEGER, "course_id", Request::fromQuery("course_id", 0)],
+            [Validator::BOOLEAN, "enabled", Request::fromQuery("enabled", true)],
+            [Validator::ENUM, "ver_status", Request::fromQuery("ver_status"), ['Verified', 'Pending', 'Rejected']],
+        ]);
+        $paginator = new Paginator($this->pdo, "users", $validated["page"], $validated["per_page"]);
+        $result = $paginator->run(
+            "SELECT
+                u.id AS uid,
+                u.email AS uemail,
+                u.role AS urole,
+                u.enabled AS uenabled,
+                u.created_at AS ucreated_at,
+                u.updated_at AS uupdated_at,
+                p.id AS pid,
+                p.user_id AS puser_id,
+                p.name_extension AS pname_extension,
+                p.first_name AS pfirst_name,
+                p.middle_name AS pmiddle_name,
+                p.last_name AS plast_name,
+                p.birth_date AS pbirth_date,
+                p.birth_place AS pbirth_place,
+                p.gender AS pgender,
+                p.student_number AS pstudent_number,
+                p.graduation_year AS pgraduation_year,
+                p.phone_number AS pphone_number,
+                p.course_id AS pcourse_id,
+                p.civil_status AS pcivil_status,
+                p.address AS paddress,
+                p.employment_status AS pemployment_status,
+                p.file_profile_picture AS pfile_profile_picture,
+                p.file_cv AS pfile_cv,
+                p.ver_stat_dean AS pver_stat_dean,
+                p.created_at AS pcreated_at,
+                p.updated_at AS pupdated_at,
+                c.id AS cid,
+                c.school_id AS cschool_id,
+                c.name AS cname,
+                c.code AS ccode,
+                os.id AS osid,
+                os.alumni_id AS osalumni_id,
+                os.occupation_id AS osoccupation_id,
+                os.address AS osaddress,
+                os.is_current AS osis_current,
+                o.occupation AS ooccupation,
+                s.id AS sid,
+                s.alumni_id AS salumni_id,
+                s.platform_id AS splatform_id,
+                s.url AS surl,
+                pl.name AS plname
+            FROM users u
+            JOIN alumni p ON p.user_id = u.id
+            JOIN courses c ON c.id = p.course_id
+            LEFT JOIN occupation_statuses os ON os.alumni_id = p.id
+            JOIN occupations o ON o.id = os.occupation_id
+            LEFT JOIN socials s ON s.alumni_id = p.id
+            JOIN platforms pl ON pl.id = s.platform_id
+            ",
+            "WHERE
+                u.role = 'alumni'
+                AND u.enabled = ?
+                AND p.ver_stat_dean = ?
+                AND p.course_id = ?
+                AND (
+                    u.email LIKE ? OR
+                    p.name_extension LIKE ? OR
+                    p.first_name LIKE ? OR
+                    p.middle_name LIKE ? OR
+                    p.last_name LIKE ? OR
+                    p.birth_date LIKE ? OR
+                    p.birth_place LIKE ? OR
+                    p.gender LIKE ? OR
+                    p.student_number LIKE ? OR
+                    p.graduation_year LIKE ? OR
+                    p.phone_number LIKE ? OR
+                    p.civil_status LIKE ? OR
+                    p.address LIKE ?
+                )
+            ",
+            [
+                $validated["enabled"],
+                $validated["ver_status"],
+                $validated["course_id"],
+                "%{$q}%", "%{$q}%", "%{$q}%",
+                "%{$q}%", "%{$q}%", "%{$q}%",
+                "%{$q}%", "%{$q}%", "%{$q}%",
+                "%{$q}%", "%{$q}%", "%{$q}%",
+                "%{$q}%",
+            ],
+            [User::class, "format"],
+            "SELECT COUNT(DISTINCT u.id) FROM users u
+            JOIN alumni p ON p.user_id = u.id
+            JOIN courses c ON c.id = p.course_id
+            LEFT JOIN occupation_statuses os ON os.alumni_id = p.id
+            JOIN occupations o ON o.id = os.occupation_id
+            LEFT JOIN socials s ON s.alumni_id = p.id
+            JOIN platforms pl ON pl.id = s.platform_id"
+        );
+        Response::json($result);
+    }
+
+    public function viewAlumniProfile($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
+        $validatedId = Validator::validateInteger("id", $id);
+        $alumni = $this->model->getAlumniById($validatedId);
+        
+        if (!$alumni) {
+            Response::json(["message" => "Alumni not found."], 400);
+        }
+
+        Response::json($alumni);
     }
 }

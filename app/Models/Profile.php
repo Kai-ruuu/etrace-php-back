@@ -35,6 +35,13 @@ class Profile
         return $statement->fetch();
     }
 
+    public function getAlumniById($id)
+    {
+        $statement = $this->pdo->prepare("SELECT * FROM alumni WHERE id = ?");
+        $statement->execute([$id]);
+        return $statement->fetch();
+    }
+
     public function getDeanByUserId($id)
     {
         $statement = $this->pdo->prepare("SELECT * FROM deans WHERE user_id = ?");
@@ -228,6 +235,84 @@ class Profile
             $this->pdo->commit();
 
             return $companyId;
+        } catch (PDOException $e) {
+            error_log($e->getMessage());
+            $this->pdo->rollback();
+            return null;
+        }
+    }
+
+    public function updateAlumniById($id, $alumni)
+    {
+        $statement = $this->pdo->prepare("
+            UPDATE alumni
+            SET
+                name_extension = ?,
+                first_name = ?,
+                middle_name = ?,
+                last_name = ?,
+                birth_date = ?,
+                birth_place = ?,
+                gender = ?,
+                student_number = ?,
+                phone_number = ?,
+                civil_status = ?,
+                employment_status = ?,
+                file_profile_picture = ?,
+                file_cv = ?,
+                ver_stat_dean = ?
+            WHERE id = ?
+        ");
+        $statement->execute([
+            $alumni["name_extension"],
+            $alumni["first_name"],
+            $alumni["middle_name"],
+            $alumni["last_name"],
+            $alumni["birth_date"],
+            $alumni["birth_place"],
+            $alumni["gender"],
+            $alumni["student_number"],
+            $alumni["phone_number"],
+            $alumni["civil_status"],
+            $alumni["employment_status"],
+            $alumni["file_profile_picture"],
+            $alumni["file_cv"],
+            $alumni["ver_stat_dean"],
+            $id
+        ]);
+        return $statement->rowCount() > 0;
+    }
+
+    public function rejectAlumni($rejection)
+    {   
+        try {
+            $this->pdo->beginTransaction();
+
+            $deanId = $rejection["dean_id"];
+            $alumniId = $rejection["alumni_id"];
+            $message = $rejection["message"];
+
+            // update company ver status
+            $statement = $this->pdo->prepare("
+                UPDATE alumni
+                SET ver_stat_dean = 'Rejected'
+                WHERE id = ?
+            ");
+            $statement->execute([$alumniId]);
+
+            // create the rejection message
+            $statement = $this->pdo->prepare("
+                INSERT INTO alumni_rejection_messages
+                    (dean_id, alumni_id, message)
+                VALUES
+                    (?, ?, ?)
+            ");
+            $statement->execute([$deanId, $alumniId, $message]);
+
+            // commit
+            $this->pdo->commit();
+
+            return $alumniId;
         } catch (PDOException $e) {
             error_log($e->getMessage());
             $this->pdo->rollback();

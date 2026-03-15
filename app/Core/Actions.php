@@ -22,6 +22,7 @@ class Action
     public const READ_ALIGNED_OCCUPATIONS = "read_aligned_occupations";
 
     public const UPDATE_COMPANY = "update_company";
+    public const UPDATE_ALUMNI = "update_alumni";
     public const UPDATE_REQUIREMENT = "UPDATE_REQUIREMENT";
     public const UPDATE_SCHOOLS = "update_schools";
     public const UPDATE_COURSES = "update_courses";

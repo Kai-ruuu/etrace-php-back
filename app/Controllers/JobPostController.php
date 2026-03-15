@@ -6,6 +6,7 @@ require_once __DIR__ . "/../Core/Response.php";
 require_once __DIR__ . "/../Core/Constants.php";
 require_once __DIR__ . "/../Core/Validator.php";
 require_once __DIR__ . "/../Core/Paginator.php";
+require_once __DIR__ . "/../Models/Course.php";
 require_once __DIR__ . "/../Models/JobPost.php";
 require_once __DIR__ . "/../Middlewares/UserGuard.php";
 
@@ -15,11 +16,17 @@ class JobPostController
     {
         $this->pdo = $pdo;
         $this->model = new JobPost($pdo);
+        $this->courseModel = new Course($pdo);
     }
 
     public function post()
     {
         $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
+
+        if ($cUser["profile"]["ver_stat_sysad"] !== "Verified"|| $cUser["profile"]["ver_stat_pstaff"] !== "Verified") {
+            Response::json(["message" => "Cannot post job yet. Your account needs to be fully verified first."], 403);
+        }
+        
         $position = Validator::validateText("position", Request::fromBody("position"), "1-255");
         $description = Validator::validateText("description", Request::fromBody("description"), "1-0");
         $rawQualifications = Request::fromBody("qualifications");
@@ -97,7 +104,9 @@ class JobPostController
             [Validator::BOOLEAN, "published", Request::fromQuery("published", true)]
         ]);
         
-        $openFilter = $validated["published"] ? "jp.open_until >= CURDATE()" : "jp.open_until < CURDATE()";
+        $openFilter = $validated["published"]
+            ? "jp.open_until >= CURDATE() AND jp.active = TRUE"
+            : "jp.open_until < CURDATE() OR jp.active = FALSE";
         $paginator = new Paginator($this->pdo, "job_posts", $validated["page"], $validated["per_page"]);
         $result = $paginator->run("
             SELECT
@@ -115,16 +124,28 @@ class JobPostController
                 jp.slots AS jpslots,
                 jp.additional_info AS jpadditional_info,
                 jp.open_until AS jpopen_until,
+                jp.active AS jpactive,
                 jp.created_at AS jpcreated_at,
                 jp.updated_at AS jpupdated_at,
                 jpc.id AS jpcid,
                 jpc.job_post_id AS jpcjob_post_id,
                 jpc.course_id AS jpccourse_id,
                 c.id AS cid,
-                c.name AS cname
+                c.name AS cname,
+                com.name AS comname,
+                com.req_logo AS comreq_logo,
+                (
+                    SELECT COUNT(*) FROM job_post_likes jpl
+                    WHERE jpl.job_post_id = jp.id
+                ) AS likes,
+                (
+                    SELECT COUNT(DISTINCT jps.alumni_id) FROM job_post_cv_submissions jps
+                    WHERE jps.job_post_id = jp.id
+                ) AS submissions
             FROM job_posts jp
             JOIN job_post_courses jpc ON jpc.job_post_id = jp.id
-            JOIN courses c ON c.id = jpc.course_id",
+            JOIN courses c ON c.id = jpc.course_id
+            JOIN companies com ON com.id = jp.company_id",
             "WHERE
                 jp.company_id = ? AND
                 {$openFilter} AND
@@ -157,5 +178,162 @@ class JobPostController
             JOIN courses c ON c.id = jpc.course_id"
         );
         Response::json($result);
+    }
+
+    public function searchAsAlumni()
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::ALUMNI]);
+        $q = Request::fromQuery("q", "");
+        $validated = Validator::batchValidate([
+            [Validator::INTEGER, "page", Request::fromQuery("page", 1)],
+            [Validator::INTEGER, "per_page", Request::fromQuery("per_page", 20)],
+        ]);
+        $alumniId = $cUser["profile"]["id"];
+
+        $paginator = new Paginator($this->pdo, "job_posts", $validated["page"], $validated["per_page"]);
+        $result = $paginator->run("
+            SELECT
+                jp.id AS jpid,
+                jp.company_id AS jpcompany_id,
+                jp.position AS jpposition,
+                jp.description AS jpdescription,
+                jp.qualifications AS jpqualifications,
+                jp.address AS jpaddress,
+                jp.salary_min AS jpsalary_min,
+                jp.salary_max AS jpsalary_max,
+                jp.work_shift AS jpwork_shift,
+                jp.work_setup AS jpwork_setup,
+                jp.employment_type AS jpemployment_type,
+                jp.slots AS jpslots,
+                jp.additional_info AS jpadditional_info,
+                jp.open_until AS jpopen_until,
+                jp.active AS jpactive,
+                jp.created_at AS jpcreated_at,
+                jp.updated_at AS jpupdated_at,
+                jpc.id AS jpcid,
+                jpc.job_post_id AS jpcjob_post_id,
+                jpc.course_id AS jpccourse_id,
+                c.id AS cid,
+                c.name AS cname,
+                com.name AS comname,
+                com.req_logo AS comreq_logo,
+                (
+                    SELECT COUNT(*) FROM job_post_likes jpl
+                    WHERE jpl.job_post_id = jp.id
+                ) AS likes,
+                (
+                    SELECT COUNT(DISTINCT jps.alumni_id) FROM job_post_cv_submissions jps
+                    WHERE jps.job_post_id = jp.id
+                ) AS submissions,
+                EXISTS (
+                    SELECT 1 FROM job_post_likes jpl
+                    WHERE jpl.job_post_id = jp.id AND jpl.alumni_id = {$alumniId}
+                ) AS is_liked,
+                EXISTS (
+                    SELECT 1 FROM job_post_cv_submissions jps
+                    WHERE
+                        jps.job_post_id = jp.id AND
+                        jps.alumni_id = {$alumniId} AND
+                        jps.status = 'Pending'
+                ) AS is_submitted
+            FROM job_posts jp
+            JOIN job_post_courses jpc ON jpc.job_post_id = jp.id
+            JOIN courses c ON c.id = jpc.course_id
+            JOIN companies com ON com.id = jp.company_id",
+            "WHERE
+                jpc.course_id = ? AND
+                jp.open_until >= CURDATE() AND
+                jp.active = TRUE AND
+                (
+                    jp.position LIKE ? OR
+                    jp.address LIKE ?  OR
+                    jp.salary_min LIKE ? OR
+                    jp.salary_max LIKE ? OR
+                    jp.work_shift LIKE ? OR
+                    jp.work_setup LIKE ? OR
+                    jp.employment_type LIKE ? OR
+                    jp.slots LIKE ?
+                )
+                ORDER BY jp.created_at DESC
+            ",
+            [
+                $cUser["profile"]["course"]["id"],
+                "%{$q}%",
+                "%{$q}%",
+                "%{$q}%",
+                "%{$q}%",
+                "%{$q}%",
+                "%{$q}%",
+                "%{$q}%",
+                "%{$q}%",
+            ],
+            [JobPost::class, "format"], "
+            SELECT COUNT(DISTINCT jp.id) FROM job_posts jp
+            JOIN job_post_courses jpc ON jpc.job_post_id = jp.id
+            JOIN courses c ON c.id = jpc.course_id"
+        );
+        Response::json($result);
+    }
+
+    public function close($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
+        $validatedId = Validator::validateInteger("post id", $id);
+        
+        if (!$this->model->getById($validatedId)) {
+            Response::json(["message" => "Job post not found."], 404);
+        }
+
+        $tookEffect = $this->model->closeById($validatedId);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to close job post."], 500);
+        }
+
+        Response::json(["message" => "Job post has been closed."]);
+    }
+
+    public function delete($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
+        $validatedId = Validator::validateInteger("post id", $id);
+        
+        if (!$this->model->getById($validatedId)) {
+            Response::json(["message" => "Job post not found."], 404);
+        }
+
+        $tookEffect = $this->model->deleteById($validatedId);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to delete job post."], 500);
+        }
+
+        Response::json(["message" => "Job post has been deleted."]);
+    }
+
+    public function repost($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
+        $validatedId = Validator::validateInteger("post id", $id);
+        $openUntil = Request::fromBody("open_until");
+        
+        if (!$this->model->getById($validatedId)) {
+            Response::json(["message" => "Job post not found."], 404);
+        }
+
+        $dateToday = new DateTime('today');
+        $openUntil = new DateTime($openUntil);
+
+        if ($openUntil < $dateToday) {
+            Response::json(["message" => "Open until date is in the past."], 400);
+        }
+
+        $tookEffect = $this->model->repostById($validatedId, $openUntil);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to repost."], 500);
+        }
+
+        Response::json(["message" => "Job has been reposted."]);
     }
 }

@@ -17,6 +17,8 @@ class Storage
         "reg_philjobnet" => "/company/reg_philjobnet",
         "cert_from_dole" => "/company/cert_from_dole",
         "cert_no_case" => "/company/cert_no_case",
+        "profile_picture" => "/alumni/profile_picture",
+        "cv" => "/alumni/cv",
     ];
 
     public static function dest($dirkey)

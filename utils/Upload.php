@@ -64,7 +64,12 @@ class Upload
 
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mimeType = $finfo->file($this->tmpPath);
+        $extension = strtolower(pathinfo($this->fileRaw['name'], PATHINFO_EXTENSION));
 
+        if ($mimeType === 'text/plain' && $extension === 'csv') {
+            $mimeType = 'text/csv';
+        }
+        
         if (!in_array($mimeType, $this->allowedMimes)) {
             unlink($this->tmpPath);
             $this->tmpPath = null;

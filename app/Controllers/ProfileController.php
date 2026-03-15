@@ -11,6 +11,8 @@ require_once __DIR__ . "/../Models/CompanyRevisionAppeal.php";
 require_once __DIR__ . "/../Models/CompanyRevisionMessage.php";
 require_once __DIR__ . "/../Models/CompanyRejectionAppeal.php";
 require_once __DIR__ . "/../Models/CompanyRejectionMessage.php";
+require_once __DIR__ . "/../Models/AlumniRejectionAppeal.php";
+require_once __DIR__ . "/../Models/AlumniRejectionMessage.php";
 require_once __DIR__ . "/../Middlewares/UserGuard.php";
 require_once __DIR__ . "/../../utils/Upload.php";
 require_once __DIR__ . "/../../utils/Password.php";
@@ -22,10 +24,12 @@ class ProfileController
         $this->pdo = $pdo;
         $this->model = new Profile($pdo);
         $this->vacancyModel = new Vacancy($pdo);
-        $this->revisionAppealModel = new CompanyRevisionAppeal($pdo);
-        $this->rejectionAppealModel = new CompanyRejectionAppeal($pdo);
-        $this->revisionMessageModel = new CompanyRevisionMessage($pdo);
-        $this->rejectionMessageModel = new CompanyRejectionMessage($pdo);
+        $this->companyRevisionAppealModel = new CompanyRevisionAppeal($pdo);
+        $this->companyRejectionAppealModel = new CompanyRejectionAppeal($pdo);
+        $this->companyRevisionMessageModel = new CompanyRevisionMessage($pdo);
+        $this->companyRejectionMessageModel = new CompanyRejectionMessage($pdo);
+        $this->alumniRejectionAppealModel = new AlumniRejectionAppeal($pdo);
+        $this->alumniRejectionMessageModel = new AlumniRejectionMessage($pdo);
     }
 
     public function updateSysad()
@@ -209,7 +213,7 @@ class ProfileController
         Response::json(["message" => "Company has been rejected."]);
     }
 
-    public function forReviseRequrement()
+    public function forReviseRequirement()
     {
         $cUser = UserGuard::run($this->pdo, [Role::PSTAFF], Action::UPDATE_REQUIREMENT);
         $companyId = Validator::validateInteger("company_id", Request::fromBody("company_id"));
@@ -235,7 +239,7 @@ class ProfileController
         Response::json(["message" => "Requirement has been marked for revision."]);
     }
 
-    public function approveRequrement()
+    public function approveRequirement()
     {
         $cUser = UserGuard::run($this->pdo, [Role::PSTAFF], Action::UPDATE_REQUIREMENT);
         $id = Validator::validateInteger("id", Request::fromBody("id"));
@@ -287,15 +291,15 @@ class ProfileController
 
         if ($sourceRole !== null) {
             if ($sourceRole === Role::SYSAD) {
-                $messageAppeals = $this->rejectionMessageModel->getByCompanyIdAsSysad($id);
+                $messageAppeals = $this->companyRejectionMessageModel->getByCompanyIdAsSysad($id);
             } else {
-                $messageAppeals = $this->rejectionMessageModel->getByCompanyIdAsPstaff($id);
+                $messageAppeals = $this->companyRejectionMessageModel->getByCompanyIdAsPstaff($id);
             }
         } else {
             if ($cUser["role"] === Role::SYSAD) {
-                $messageAppeals = $this->rejectionMessageModel->getByCompanyIdAsSysad($id);
+                $messageAppeals = $this->companyRejectionMessageModel->getByCompanyIdAsSysad($id);
             } else {
-                $messageAppeals = $this->rejectionMessageModel->getByCompanyIdAsPstaff($id);
+                $messageAppeals = $this->companyRejectionMessageModel->getByCompanyIdAsPstaff($id);
             }
         }
 
@@ -322,7 +326,7 @@ class ProfileController
             Response::json(["message" => "Company profile not found."], 404);
         }
         
-        $revisionsAndAppeals = $this->revisionMessageModel->getRevisionNotesAndAppeals($id, $attrName);
+        $revisionsAndAppeals = $this->companyRevisionMessageModel->getRevisionNotesAndAppeals($id, $attrName);
 
         Response::json($revisionsAndAppeals);
     }
@@ -371,19 +375,19 @@ class ProfileController
         Response::json(["message" => "Requirement has been updated."]);
     }
 
-    public function writeRejectionAppeal()
+    public function writeCompanyRejectionAppeal()
     {
         $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
         $message = Validator::validateText("message", Request::fromBody("message"), "1-0");
         $rejectionId = Validator::validateInteger("rejection_id", Request::fromBody("rejection_id"));
 
-        $rejection = $this->rejectionMessageModel->getById($rejectionId);
+        $rejection = $this->companyRejectionMessageModel->getById($rejectionId);
         
         if (!$rejection) {
             Response::json(["message" => "Rejection not found."], 404);
         }
 
-        $appealId = $this->rejectionAppealModel->create([
+        $appealId = $this->companyRejectionAppealModel->create([
             "company_id" => $cUser["profile"]["id"],
             "rejection_id" => $rejectionId,
             "message" => $message,
@@ -396,19 +400,19 @@ class ProfileController
         Response::json(["message" => "Your appeal has been sent."], 201);
     }
 
-    public function writeRevisionAppeal()
+    public function writeCompanyRevisionAppeal()
     {
         $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
         $message = Validator::validateText("message", Request::fromBody("message"), "1-0");
         $revisionId = Validator::validateInteger("revision_id", Request::fromBody("revision_id"));
 
-        $rejection = $this->revisionMessageModel->getById($revisionId);
+        $rejection = $this->companyRevisionMessageModel->getById($revisionId);
         
         if (!$rejection) {
             Response::json(["message" => "Revision request not found."], 404);
         }
 
-        $appealId = $this->revisionAppealModel->create([
+        $appealId = $this->companyRevisionAppealModel->create([
             "company_id" => $cUser["profile"]["id"],
             "resubmit_id" => $revisionId,
             "message" => $message,
@@ -496,5 +500,108 @@ class ProfileController
         $vacancy = Vacancy::format($vacancy);
         
         Response::json($vacancy, 201);
+    }
+
+    public function pendAlumni($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::UPDATE_ALUMNI);
+        $validatedId = Validator::validateInteger("id", $id);
+        $profile = $this->model->getAlumniById($id);
+
+        if (!$profile) {
+            Response::json(["message" => "Alumni profile not found."], 404);
+        }
+
+        $profile["ver_stat_dean"] = "Pending";
+        $tookEffect = $this->model->updateAlumniById($validatedId, $profile);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to pend the alumni."], 500);
+        }
+
+        Response::json(["message" => "Alumni has been enlisted as pending."]);
+    }
+    
+    public function verifyAlumni($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::UPDATE_ALUMNI);
+        $validatedId = Validator::validateInteger("id", $id);
+        $profile = $this->model->getAlumniById($id);
+        
+        if (!$profile) {
+            Response::json(["message" => "Profile not found."], 404);
+        }
+
+        $profile["ver_stat_dean"] = "Verified";
+        $tookEffect = $this->model->updateAlumniById($validatedId, $profile);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to verify the alumni."], 500);
+        }
+
+        Response::json(["message" => "Alumni has been verified."]);
+    }
+
+    public function rejectAlumni($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::UPDATE_ALUMNI);
+        $validatedId = Validator::validateInteger("id", $id);
+        $message = Validator::validateText("reason", Request::fromBody("message"), "1-0");
+        $alumniProfile = $this->model->getAlumniById($id);
+
+        if (!$alumniProfile) {
+            Response::json(["message" => "Alumni profile not found."], 404);
+        }
+
+        $alumniProfile["ver_stat_sysad"] = "Rejected";
+        $tookEffect = $this->model->rejectAlumni([
+            "dean_id" => $cUser["profile"]["id"],
+            "alumni_id" => $id,
+            "message" => $message,
+        ]);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to reject the alumni."], 500);
+        }
+
+        Response::json(["message" => "Alumni has been rejected."]);
+    }
+
+    public function getAlumniRejectionAppeals($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN, Role::ALUMNI]);
+        $id = Validator::validateInteger("id", $id);
+
+        if (!$this->model->getAlumniById($id)) {
+            Response::json(["message" => "Alumni profile not found."], 404);
+        }
+
+        $messageAppeals = $this->alumniRejectionMessageModel->getByAlumniId($id);
+        Response::json($messageAppeals);
+    }
+
+    public function writeAlumniRejectionAppeal()
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::ALUMNI]);
+        $message = Validator::validateText("message", Request::fromBody("message"), "1-0");
+        $rejectionId = Validator::validateInteger("rejection_id", Request::fromBody("rejection_id"));
+
+        $rejection = $this->alumniRejectionMessageModel->getById($rejectionId);
+        
+        if (!$rejection) {
+            Response::json(["message" => "Rejection not found."], 404);
+        }
+
+        $appealId = $this->alumniRejectionAppealModel->create([
+            "alumni_id" => $cUser["profile"]["id"],
+            "rejection_id" => $rejectionId,
+            "message" => $message,
+        ]);
+
+        if (!$appealId) {
+            Response::json(["message" => "Unable to write an appeal"], 500);
+        }
+
+        Response::json(["message" => "Your appeal has been sent."], 201);
     }
 }
