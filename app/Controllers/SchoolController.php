@@ -55,6 +55,12 @@ class SchoolController
         Response::json($shools);
     }
 
+    public function getAllActive()
+    {
+        $schools = $this->model->getAllActive();
+        Response::json($schools);
+    }
+
     public function rename($id)
     {
         $cUser = UserGuard::run($this->pdo, [Role::SYSAD], Action::UPDATE_SCHOOLS);

@@ -21,6 +21,13 @@ class School
         return $statement->fetchAll();
     }
     
+    public function getAllActive()
+    {
+        $statement = $this->pdo->prepare("SELECT * FROM schools WHERE archived IS FALSE");
+        $statement->execute();
+        return $statement->fetchAll();
+    }
+    
     public function getById($id)
     {
         $statement = $this->pdo->prepare("SELECT * FROM schools WHERE id = ?");

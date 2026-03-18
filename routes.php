@@ -15,6 +15,7 @@ $router->get("/api/auth/logout", [AuthController::class, "logout"]);
 $router->post("/api/auth", [AuthController::class, "login"]);
 
 $router->get("/api/schools", [SchoolController::class, "getAll"]);
+$router->get("/api/schools/active", [SchoolController::class, "getAllActive"]);
 $router->get("/api/schools/search", [SchoolController::class, "search"]);
 $router->post("/api/schools", [SchoolController::class, "create"]);
 $router->patch("/api/schools/{id}/rename", [SchoolController::class, "rename"]);
@@ -61,6 +62,7 @@ $router->patch("/api/users/pstaff/{id}/disable", [UserController::class, "disabl
 $router->get("/api/users/company/{id}/revision-appeals", [ProfileController::class, "getCompanyNotesAndAppeals"]);
 $router->get("/api/users/company/{id}/rejection-appeals", [ProfileController::class, "getCompanyRejectionAppeals"]);
 $router->post("/api/users/company", [UserController::class, "createCompany"]);
+$router->post("/api/users/company/{id}/update-profile", [ProfileController::class, "updateProfile"]);
 $router->post("/api/users/company/posts", [JobPostController::class, "post"]);
 $router->get("/api/users/company/search", [UserController::class, "searchCompanies"]);
 $router->get("/api/users/company/posts/search", [JobPostController::class, "searchAsCompany"]);
@@ -94,6 +96,7 @@ $router->patch("/api/users/company/approve-requirement", [ProfileController::cla
 $router->patch("/api/users/company/revise-requirement", [ProfileController::class, "forReviseRequirement"]);
 $router->patch("/api/users/company/vacancy/{id}/edit", [ProfileController::class, "editVacancy"]);
 $router->patch("/api/users/company/vacancy/{id}/edit-qualification", [ProfileController::class, "editVacancyQualifications"]);
+$router->delete("/api/users/company/vacancy/{id}/delete", [ProfileController::class, "deleteVacancy"]);
 
 $router->get("/api/users/alumni/search", [UserController::class, "searchAlumni"]);
 $router->get("/api/users/alumni/{id}/profile", [UserController::class, "viewAlumniProfile"]);

@@ -334,15 +334,13 @@ class ProfileController
     public function reviseRequirement()
     {
         $cUser = UserGuard::run($this->pdo, [Role::COMPANY], Action::UPDATE_REQUIREMENT);
-
-        error_log("Key: " . $_POST["key"] . " Display: " . $_POST["display"] . " Source: " .  $_POST["source"]);
         
         $fileKey = Validator::validateEnum("key", $_POST["key"], [
             "req_company_profile", "req_business_permit", "req_sec",
             "req_dti_cda", "req_reg_of_est", "req_philjobnet_reg",
             "req_cert_from_dole", "req_cert_no_case",
         ]);
-        $fileDisplay = Validator::validateText("display", $_POST["display"], "1-30");
+        $fileDisplay = Validator::validateText("display", $_POST["display"], "1-50");
         $fileDest = Validator::validateEnum("source", $_POST["source"], [
             "profile", "permit", "sec", "dti_cda", "reg_of_est",
             "reg_philjobnet", "cert_from_dole", "cert_no_case",
@@ -362,7 +360,14 @@ class ProfileController
             Response::json(["message" => $errs[0]], 422);
         }
 
-        $companyProfile[$fileKey] = $uploads->getFileName(0);
+        $filename = $uploads->getFileName(0);
+        $companyProfile[$fileKey] = $filename;
+        
+        if (in_array($companyProfile["ver_stat_pstaff"], ["Pending", "Verified"])) {
+            $companyProfile["ver_stat_pstaff"] = "Pending";
+            $companyProfile["stat_" . $fileKey] = "Pending";
+        }
+        
         $tookEffect = $this->model->updateCompanyById($companyProfile["id"], $companyProfile);
 
         if (!$tookEffect) {
@@ -372,7 +377,10 @@ class ProfileController
 
         $uploads->commit();
         Storage::delete(Storage::dest($fileDest), $currentFile);
-        Response::json(["message" => "Requirement has been updated."]);
+        Response::json([
+            "message" => "Requirement has been updated.",
+            "filename" => $filename
+        ]);
     }
 
     public function writeCompanyRejectionAppeal()
@@ -452,15 +460,20 @@ class ProfileController
     {
         $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
         $valId = Validator::validateInteger("id", $id);
-        $newQualifications = Validator::validateText("qualifications", json_encode(Request::fromBody("qualifications")), "1-0");
+        $rawQualifications = Request::fromBody("qualifications");
+        $newQualifications = json_encode($rawQualifications);
         $vacancy = $this->vacancyModel->getById($valId);
 
         if (!$vacancy) {
             Response::json(["message" => "Vacancy not found."]);
         }
 
+        if (count($rawQualifications) < 0) {
+            Response::json(["message" => "There should be at least 1 qualification in a vacancy."], 400);
+        }
+
         $vacancy["qualifications"] = $newQualifications;
-        $tookEffect = $this->vacancyModel->updateById($id, $vacancy);
+        $tookEffect = $this->vacancyModel->updateById($valId, $vacancy);
 
         if (!$tookEffect) {
             Response::json(["message" => "Failed to update qualification."], 500);
@@ -474,14 +487,13 @@ class ProfileController
         $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
         $jobTitle = Validator::validateText("job_title", Request::fromBody("job_title"), "1-255");
         $slots = Validator::validateInteger("slots", Request::fromBody("slots"));
-        $rawQualifications = Request::fromBody("qualifications");
-        $qualifications = Validator::validateText("qualifications", json_encode($rawQualifications), "1-0");
+        $qualifications = Request::fromBody("qualifications");
 
         if ($slots < 1) {
             Response::json(["message" => "There should be at least 1 available slot in a vacancy."], 400);
         }
 
-        if (count(json_decode($rawQualifications)) < 0) {
+        if (count(json_decode($qualifications)) < 0) {
             Response::json(["message" => "There should be at least 1 qualification in a vacancy."], 400);
         }
 
@@ -498,8 +510,28 @@ class ProfileController
 
         $vacancy = $this->vacancyModel->getById($vacancyId);
         $vacancy = Vacancy::format($vacancy);
+        $vacancy["qualifications"] = json_encode($vacancy["qualifications"]);
         
         Response::json($vacancy, 201);
+    }
+
+    public function deleteVacancy($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
+        $vacancyId = Validator::validateInteger("id", $id);
+        $vacancy = $this->vacancyModel->getById($vacancyId);
+
+        if (!$vacancy) {
+            Response::json(["message" => "Vacancy not found."], 404);
+        }
+
+        $tookEffect = $this->vacancyModel->deleteById($vacancyId);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to remove vacancy."], 500);
+        }
+        
+        Response::json(["message" => "Vacancy has been removed."]);
     }
 
     public function pendAlumni($id)
@@ -603,5 +635,56 @@ class ProfileController
         }
 
         Response::json(["message" => "Your appeal has been sent."], 201);
+    }
+
+    public function updateProfile($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
+        $address = Validator::validateText("address", $_POST["address"], "1-512");
+        $logo = isset($_FILES["logo"]) ? $_FILES["logo"] : null;
+        $hasLogo = !empty($logo) && $logo["error"] === UPLOAD_ERR_OK;
+        $companyProfile = $this->model->getCompanyById($cUser["profile"]["id"]);
+        $currentLogo = $cUser["profile"]["req_logo"];
+        
+        $addressChanged = $companyProfile["address"] !== $address;
+
+        if (!$hasLogo && !$addressChanged) {
+            Response::json(["message" => "No changes were made."]);
+        }
+
+        $uploads = null;
+
+        if ($hasLogo) {
+            $uploads = new Uploads([
+                new Upload("logo", Storage::dest("logo"), "logo", ["image/png", "image/jpg", "image/jpeg"]),
+            ]);
+            $uploads->stage();
+            $errs = $uploads->getErrors();
+
+            if (!empty($errs)) {
+                $uploads->rollback();
+                Response::json(["message" => $errs[0]], 422);
+            }
+
+            $companyProfile["req_logo"] = $uploads->getFileName(0);
+        }
+
+        if ($addressChanged) {
+            $companyProfile["address"] = $address;
+        }
+
+        $tookEffect = $this->model->updateCompanyById($companyProfile["id"], $companyProfile);
+
+        if (!$tookEffect) {
+            if ($hasLogo) $uploads->rollback();
+            Response::json(["message" => "Unable to save changes."], 500);
+        }
+
+        if ($hasLogo) {
+            $uploads->commit();
+            Storage::delete(Storage::dest("logo"), $currentLogo);
+        }
+
+        Response::json(["message" => "Changes saved."]);
     }
 }

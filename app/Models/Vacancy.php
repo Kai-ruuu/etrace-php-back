@@ -46,9 +46,16 @@ class Vacancy
                 job_title = ?,
                 slots = ?,
                 qualifications = ?
-            WHERE id =?
+            WHERE id = ?
         ");
         $statement->execute([$jobTitle, $slots, $qualifications, $id]);
+        return $statement->rowCount() > 0;
+    }
+
+    public function deleteById($id)
+    {
+        $statement = $this->pdo->prepare("DELETE FROM vacancies WHERE id = ?");
+        $statement->execute([$id]);
         return $statement->rowCount() > 0;
     }
 
