@@ -38,6 +38,7 @@ class Permissions
                 Action::UPDATE_RECORDS,
                 Action::UPDATE_PROFILE,
                 Action::DELETE_ALIGNED_OCCUPATIONS,
+                Action::ENDIS_ALUMNI,
             ],
             "pstaff" => [
                 Action::READ_COURSES,

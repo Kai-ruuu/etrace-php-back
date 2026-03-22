@@ -14,6 +14,12 @@ require_once __DIR__ . "/../Middlewares/UserGuard.php";
 
 class CourseController
 {   
+    protected $pdo;
+    protected $model;
+    protected $profileModel;
+    protected $occupationModel;
+    protected $alignmentModel;
+    
     public function __construct($pdo)
     {
         $this->pdo = $pdo;

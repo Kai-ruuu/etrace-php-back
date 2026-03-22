@@ -11,6 +11,9 @@ require_once __DIR__ . "/../Middlewares/UserGuard.php";
 
 class PlatformController
 {
+    protected $pdo;
+    protected $model;
+    
     public function __construct($pdo)
     {
         $this->pdo = $pdo;

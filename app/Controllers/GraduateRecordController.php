@@ -8,6 +8,11 @@ require_once __DIR__ . "/../../utils/GraduateRecordValidator.php";
 
 class GraduateRecordController
 {
+    protected $pdo;
+    protected $model;
+    protected $courseModel;
+    protected $profileModel;
+    
     public function __construct($pdo)
     {
         $this->pdo = $pdo;

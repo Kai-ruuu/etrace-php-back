@@ -19,4 +19,15 @@ class Role
     public static function all() {
         return [self::SYSAD, self::DEAN, self::PSTAFF, self::COMPANY, self::ALUMNI];
     }
+
+    public static function getDisplay($role)
+    {
+        return [
+            self::SYSAD => 'System Administrator',
+            self::DEAN => 'Dean',
+            self::PSTAFF => 'PESO Staff',
+            self::COMPANY => 'Company',
+            self::ALUMNI => 'Alumni',
+        ][$role];
+    }
 }

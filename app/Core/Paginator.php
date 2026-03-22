@@ -2,6 +2,12 @@
 
 class Paginator
 {
+    protected $pdo;
+    protected $table;
+    protected $page;
+    protected $perPage;
+    protected $offset;
+    
     public function __construct($pdo, $table, $page, $perPage)
     {
         $this->pdo = $pdo;

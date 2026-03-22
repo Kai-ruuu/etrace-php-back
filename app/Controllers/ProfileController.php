@@ -6,6 +6,7 @@ require_once __DIR__ . "/../Core/Response.php";
 require_once __DIR__ . "/../Core/Constants.php";
 require_once __DIR__ . "/../Core/Validator.php";
 require_once __DIR__ . "/../Models/Vacancy.php";
+require_once __DIR__ . "/../Models/User.php";
 require_once __DIR__ . "/../Models/Profile.php";
 require_once __DIR__ . "/../Models/CompanyRevisionAppeal.php";
 require_once __DIR__ . "/../Models/CompanyRevisionMessage.php";
@@ -13,16 +14,30 @@ require_once __DIR__ . "/../Models/CompanyRejectionAppeal.php";
 require_once __DIR__ . "/../Models/CompanyRejectionMessage.php";
 require_once __DIR__ . "/../Models/AlumniRejectionAppeal.php";
 require_once __DIR__ . "/../Models/AlumniRejectionMessage.php";
+require_once __DIR__ . "/../Services/MailingService.php";
 require_once __DIR__ . "/../Middlewares/UserGuard.php";
 require_once __DIR__ . "/../../utils/Upload.php";
 require_once __DIR__ . "/../../utils/Password.php";
 
 class ProfileController
 {   
+    protected MailingService $mailingSvc;
+    protected $pdo;
+    protected $model;
+    protected $userModel;
+    protected $vacancyModel;
+    protected $companyRevisionAppealModel;
+    protected $companyRejectionAppealModel;
+    protected $companyRevisionMessageModel;
+    protected $companyRejectionMessageModel;
+    protected $alumniRejectionAppealModel;
+    protected $alumniRejectionMessageModel;
+
     public function __construct($pdo)
     {
         $this->pdo = $pdo;
         $this->model = new Profile($pdo);
+        $this->userModel = new User($pdo);
         $this->vacancyModel = new Vacancy($pdo);
         $this->companyRevisionAppealModel = new CompanyRevisionAppeal($pdo);
         $this->companyRejectionAppealModel = new CompanyRejectionAppeal($pdo);
@@ -30,6 +45,8 @@ class ProfileController
         $this->companyRejectionMessageModel = new CompanyRejectionMessage($pdo);
         $this->alumniRejectionAppealModel = new AlumniRejectionAppeal($pdo);
         $this->alumniRejectionMessageModel = new AlumniRejectionMessage($pdo);
+        $mailingCfg = MailingConfig::buildFromEnv();
+        $this->mailingSvc = new MailingService($mailingCfg);
     }
 
     public function updateSysad()
@@ -135,6 +152,15 @@ class ProfileController
             Response::json(["message" => "Unable to pend the company."], 500);
         }
 
+        $user = $this->userModel->getCompanyByProfileId($validatedId);
+        $sent = $this->mailingSvc->sendCompanyUnderReviewMail($cUser, $user);
+
+        if ($sent) {
+            Logger::info("Under review email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Under review email not sent");
+        }
+        
         Response::json(["message" => "Company has been enlisted as pending."]);
     }
     
@@ -174,6 +200,15 @@ class ProfileController
             Response::json(["message" => "Unable to verify the company."], 500);
         }
 
+        $user = $this->userModel->getCompanyByProfileId($validatedId);
+        $sent = $this->mailingSvc->sendCompanyVerifiedMail($cUser, $user);
+
+        if ($sent) {
+            Logger::info("Verified email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Verified email not sent");
+        }
+
         Response::json(["message" => "Company has been verified."]);
     }
 
@@ -210,6 +245,15 @@ class ProfileController
             Response::json(["message" => "Unable to reject the company."], 500);
         }
 
+        $user = $this->userModel->getCompanyByProfileId($validatedId);
+        $sent = $this->mailingSvc->sendCompanyRejectedMail($cUser, $user, $message);
+
+        if ($sent) {
+            Logger::info("Rejection email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Rejection email not sent");
+        }
+        
         Response::json(["message" => "Company has been rejected."]);
     }
 
@@ -218,7 +262,17 @@ class ProfileController
         $cUser = UserGuard::run($this->pdo, [Role::PSTAFF], Action::UPDATE_REQUIREMENT);
         $companyId = Validator::validateInteger("company_id", Request::fromBody("company_id"));
         $message = Validator::validateText("message", Request::fromBody("message"), "1-0");
-        $requirementStat = Validator::validateText("requirement_stat", Request::fromBody("requirement_stat"), "1-30");
+        $requirementStat = Validator::validateEnum("requirement_stat", Request::fromBody("requirement_stat"), [
+            "stat_req_company_profile",
+            "stat_req_business_permit",
+            "stat_req_sec",
+            "stat_req_dti_cda",
+            "stat_req_reg_of_est",
+            "stat_req_cert_from_dole",
+            "stat_req_cert_no_case",
+            "stat_req_philjobnet_reg",
+            "stat_req_list_of_vacancies",
+        ]);
         $companyProfile = $this->model->getCompanyById($companyId);
 
         if (!$companyProfile) {
@@ -234,6 +288,27 @@ class ProfileController
 
         if (!$tookEffect) {
             Response::json(["message" => "Unable to mark requirement as for revision."], 500);
+        }
+
+        $reqStatDisplay = [
+            'stat_req_company_profile' => 'Company Profile',
+            'stat_req_business_permit' => 'Business Permit',
+            'stat_req_sec' => 'SEC',
+            'stat_req_dti_cda' => 'DTI / CDA Reg.',
+            'stat_req_reg_of_est' => 'Registry of Establishment fr. DOLE',
+            'stat_req_cert_from_dole' => 'Certification from DOLE Provincial Office',
+            'stat_req_cert_no_case' => 'Certification of No Pending Case',
+            'stat_req_philjobnet_reg' => 'Phil-JobNet Reg.',
+            'stat_req_list_of_vacancies' => 'List of Vacancies',
+        ];
+
+        $user = $this->userModel->getCompanyByProfileId($companyId);
+        $sent = $this->mailingSvc->sendCompanyRequirementRevisionMail($cUser, $user, $reqStatDisplay[$requirementStat], $message);
+
+        if ($sent) {
+            Logger::info("Revision request email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Revision request email not sent");
         }
 
         Response::json(["message" => "Requirement has been marked for revision."]);
@@ -270,6 +345,27 @@ class ProfileController
 
         if (!$tookEffect) {
             Response::json(["message" => "Unable to approve requirement."], 500);
+        }
+
+        $reqStatDisplay = [
+            'stat_req_company_profile' => 'Company Profile',
+            'stat_req_business_permit' => 'Business Permit',
+            'stat_req_sec' => 'SEC',
+            'stat_req_dti_cda' => 'DTI / CDA Reg.',
+            'stat_req_reg_of_est' => 'Registry of Establishment fr. DOLE',
+            'stat_req_cert_from_dole' => 'Certification from DOLE Provincial Office',
+            'stat_req_cert_no_case' => 'Certification of No Pending Case',
+            'stat_req_philjobnet_reg' => 'Phil-JobNet Reg.',
+            'stat_req_list_of_vacancies' => 'List of Vacancies',
+        ];
+
+        $user = $this->userModel->getCompanyByProfileId($id);
+        $sent = $this->mailingSvc->sendCompanyRequirementApprovedMail($cUser, $user, $reqStatDisplay[$requirementStat]);
+
+        if ($sent) {
+            Logger::info("Requirement approval email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Requirement approval email not sent");
         }
 
         Response::json(["message" => "Requirement has been approved."]);
@@ -365,7 +461,7 @@ class ProfileController
         
         if (in_array($companyProfile["ver_stat_pstaff"], ["Pending", "Verified"])) {
             $companyProfile["ver_stat_pstaff"] = "Pending";
-            $companyProfile["stat_" . $fileKey] = "Pending";
+            // $companyProfile["stat_" . $fileKey] = "Pending";
         }
         
         $tookEffect = $this->model->updateCompanyById($companyProfile["id"], $companyProfile);
@@ -551,6 +647,15 @@ class ProfileController
             Response::json(["message" => "Unable to pend the alumni."], 500);
         }
 
+        $user = $this->userModel->getAlumniByProfileId($validatedId);
+        $sent = $this->mailingSvc->sendAlumniUnderReviewMail($cUser, $user);
+
+        if ($sent) {
+            Logger::info("Under review email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Under review email not sent");
+        }
+
         Response::json(["message" => "Alumni has been enlisted as pending."]);
     }
     
@@ -571,6 +676,15 @@ class ProfileController
             Response::json(["message" => "Unable to verify the alumni."], 500);
         }
 
+        $user = $this->userModel->getAlumniByProfileId($validatedId);
+        $sent = $this->mailingSvc->sendAlumniVerifiedMail($cUser, $user);
+
+        if ($sent) {
+            Logger::info("Verified email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Verified email not sent");
+        }
+        
         Response::json(["message" => "Alumni has been verified."]);
     }
 
@@ -594,6 +708,15 @@ class ProfileController
 
         if (!$tookEffect) {
             Response::json(["message" => "Unable to reject the alumni."], 500);
+        }
+
+        $user = $this->userModel->getAlumniByProfileId($validatedId);
+        $sent = $this->mailingSvc->sendAlumniRejectedMail($cUser, $user, $message);
+
+        if ($sent) {
+            Logger::info("Rejection email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Rejection email not sent");
         }
 
         Response::json(["message" => "Alumni has been rejected."]);

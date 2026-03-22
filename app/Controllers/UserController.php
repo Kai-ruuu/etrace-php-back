@@ -10,13 +10,20 @@ require_once __DIR__ . "/../Models/User.php";
 require_once __DIR__ . "/../Middlewares/UserGuard.php";
 require_once __DIR__ . "/../../utils/Upload.php";
 require_once __DIR__ . "/../../utils/Password.php";
+require_once __DIR__ . "/../Services/MailingService.php";
 
 class UserController
 {   
+    protected $pdo;
+    protected $model;
+    protected MailingService $mailingSvc;
+    
     public function __construct($pdo)
     {
         $this->pdo = $pdo;
         $this->model = new User($pdo);
+        $mailingCfg = MailingConfig::buildFromEnv();
+        $this->mailingSvc = new MailingService($mailingCfg);
     }
 
     public function createSysad()
@@ -47,6 +54,14 @@ class UserController
         }
 
         $user = $this->model->getSysadById($userId);
+        $sent = $this->mailingSvc->sendNewlyAssignedMail($cUser, $user);
+
+        if ($sent) {
+            Logger::info("Assignment email sent");
+        } else {
+            Logger::error(Logger::ERR_MAILING_SERVICE, "Assignment email not sent");
+        }
+
         Response::json($user, 201);
     }
 
@@ -112,7 +127,8 @@ class UserController
         if (!$tookEffect) {
             Response::json(["message" => "Unable to enable system administrator."], 500);
         }    
-            
+        
+        $this->mailingSvc->sendEnableMail($cUser, $user);
         Response::json([
             "message" => "System administrator has been enabled.",
             "id" => $validatedId,
@@ -139,7 +155,8 @@ class UserController
         if (!$tookEffect) {
             Response::json(["message" => "Unable to disable system administrator."], 500);
         }    
-            
+        
+        $this->mailingSvc->sendDisableMail($cUser, $user);
         Response::json([
             "message" => "System administrator has been disabled.",
             "id" => $validatedId,
@@ -176,6 +193,7 @@ class UserController
         }
 
         $user = $this->model->getDeanById($userId);
+        $this->mailingSvc->sendNewlyAssignedMail($cUser, $user);
         Response::json($user, 201);
     }
 
@@ -244,7 +262,8 @@ class UserController
         if (!$tookEffect) {
             Response::json(["message" => "Unable to enable dean."], 500);
         }    
-            
+        
+        $this->mailingSvc->sendEnableMail($cUser, $user);
         Response::json([
             "message" => "Dean has been enabled.",
             "id" => $validatedId,
@@ -267,7 +286,8 @@ class UserController
         if (!$tookEffect) {
             Response::json(["message" => "Unable to disable dean."], 500);
         }    
-            
+        
+        $this->mailingSvc->sendDisableMail($cUser, $user);
         Response::json([
             "message" => "Dean has been disabled.",
             "id" => $validatedId,
@@ -302,6 +322,7 @@ class UserController
         }
 
         $user = $this->model->getPstaffById($userId);
+        $this->mailingSvc->sendNewlyAssignedMail($cUser, $user);
         Response::json($user, 201);
     }
 
@@ -363,7 +384,8 @@ class UserController
         if (!$tookEffect) {
             Response::json(["message" => "Unable to enable peso staff."], 500);
         }    
-            
+        
+        $this->mailingSvc->sendEnableMail($cUser, $user);
         Response::json([
             "message" => "PESO Staff has been enabled.",
             "id" => $validatedId,
@@ -386,7 +408,8 @@ class UserController
         if (!$tookEffect) {
             Response::json(["message" => "Unable to disable peso staff."], 500);
         }    
-            
+        
+        $this->mailingSvc->sendDisableMail($cUser, $user);
         Response::json([
             "message" => "PESO Staff has been disabled.",
             "id" => $validatedId,
@@ -592,6 +615,7 @@ class UserController
             Response::json(["message" => "Unable to enable company."], 500);
         }    
             
+        $this->mailingSvc->sendEnableMail($cUser, $user);
         Response::json([
             "message" => "Company has been enabled.",
             "id" => $validatedId,
@@ -615,6 +639,7 @@ class UserController
             Response::json(["message" => "Unable to disable company."], 500);
         }    
             
+        $this->mailingSvc->sendDisableMail($cUser, $user);
         Response::json([
             "message" => "Company has been disabled.",
             "id" => $validatedId,
@@ -879,6 +904,54 @@ class UserController
             JOIN platforms pl ON pl.id = s.platform_id"
         );
         Response::json($result);
+    }
+
+    public function enableAlumni($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::ENDIS_ALUMNI);
+        $validatedId = Validator::validateInteger("id", $id);
+        $user = $this->model->getById($validatedId);
+
+        if (!$user) {
+            Response::json(["message" => "Alumni does not exist."], 404);
+        }
+
+        $user["enabled"] = true;
+        $tookEffect = $this->model->updateById($validatedId, $user);
+        
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to enable alumni."], 500);
+        }    
+        
+        $this->mailingSvc->sendEnableMail($cUser, $user);
+        Response::json([
+            "message" => "Alumni has been enabled.",
+            "id" => $validatedId,
+        ]);
+    }
+
+    public function disableAlumni($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::DEAN], Action::ENDIS_ALUMNI);
+        $validatedId = Validator::validateInteger("id", $id);
+        $user = $this->model->getById($validatedId);
+
+        if (!$user) {
+            Response::json(["message" => "Alumni does not exist."], 404);
+        }
+
+        $user["enabled"] = false;
+        $tookEffect = $this->model->updateById($validatedId, $user);
+        
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to disable alumni."], 500);
+        }    
+        
+        $this->mailingSvc->sendDisableMail($cUser, $user);
+        Response::json([
+            "message" => "Alumni has been disabled.",
+            "id" => $validatedId,
+        ]);
     }
 
     public function viewAlumniProfile($id)

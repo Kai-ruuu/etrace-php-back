@@ -4,6 +4,8 @@ require_once __DIR__ . "/../Core/Constants.php";
 
 class User
 {   
+    protected $pdo;
+    
     public function __construct($pdo)
     {
         $this->pdo = $pdo;
@@ -350,6 +352,75 @@ class User
         return self::format($user);
     }
 
+    public function getCompanyByProfileId($profileId)
+    {
+        $statement = $this->pdo->prepare("
+            SELECT
+                u.id AS uid,
+                u.email AS uemail,
+                u.role AS urole,
+                u.enabled AS uenabled,
+                u.created_at AS ucreated_at,
+                u.updated_at AS uupdated_at,
+                p.id AS pid,
+                p.user_id AS puser_id,
+                p.name AS pname,
+                p.address AS paddress,
+                p.industry AS pindustry,
+                p.req_logo AS preq_logo,
+                p.req_company_profile AS preq_company_profile,
+                p.req_business_permit AS preq_business_permit,
+                p.req_sec AS preq_sec,
+                p.req_dti_cda AS preq_dti_cda,
+                p.req_reg_of_est AS preq_reg_of_est,
+                p.req_cert_from_dole AS preq_cert_from_dole,
+                p.req_cert_no_case AS preq_cert_no_case,
+                p.req_philjobnet_reg AS preq_philjobnet_reg,
+                p.stat_req_logo AS pstat_req_logo,
+                p.stat_req_company_profile AS pstat_req_company_profile,
+                p.stat_req_business_permit AS pstat_req_business_permit,
+                p.stat_req_sec AS pstat_req_sec,
+                p.stat_req_dti_cda AS pstat_req_dti_cda,
+                p.stat_req_reg_of_est AS pstat_req_reg_of_est,
+                p.stat_req_cert_from_dole AS pstat_req_cert_from_dole,
+                p.stat_req_cert_no_case AS pstat_req_cert_no_case,
+                p.stat_req_philjobnet_reg AS pstat_req_philjobnet_reg,
+                p.stat_req_list_of_vacancies AS pstat_req_list_of_vacancies,
+                p.ver_stat_sysad AS pver_stat_sysad,
+                p.ver_stat_pstaff AS pver_stat_pstaff,
+                v.id AS vid,
+                v.job_title AS vjob_title,
+                v.slots AS vslots,
+                v.qualifications AS vqualifications
+            FROM users u
+            JOIN companies p ON p.user_id = u.id
+            LEFT JOIN vacancies v ON v.company_id = p.id
+            WHERE p.id = ? AND u.role = 'company'
+        ");
+        $statement->execute([$profileId]);
+        $rows = $statement->fetchAll();
+
+        if (empty($rows)) {
+            return null;
+        }
+
+        $user = $rows[0];
+        $user["vacancies"] = [];
+
+        foreach ($rows as $row) {
+            if (!empty($row["vid"])) {
+                $user["vacancies"][] = [
+                    "id"             => $row["vid"],
+                    "job_title"      => $row["vjob_title"],
+                    "slots"          => $row["vslots"],
+                    "qualifications" => $row["vqualifications"],
+                ];
+            }
+        }
+
+        return self::format($user);
+    }
+
     public function createAlumni($alumni)
     {
         $email = $alumni["email"];
@@ -508,6 +579,106 @@ class User
             WHERE u.id = ? AND u.role = 'alumni'
         ");
         $statement->execute([$id]);
+        $rows = $statement->fetchAll();
+
+        if (empty($rows)) {
+            return null;
+        }
+
+        $user = $rows[0];
+        $user["occupations"] = [];
+        $user["socials"] = [];
+
+        foreach ($rows as $row) {
+            if (!empty($row["osid"])) {
+                $occ = [
+                    "id"             => $row["osid"],
+                    "alumni_id"      => $row["osalumni_id"],
+                    "occupation_id"  => $row["osoccupation_id"],
+                    "address"        => $row["osaddress"],
+                    "is_current"     => $row["osis_current"],
+                    "occupation"     => $row["ooccupation"],
+                ];
+                
+                if (!in_array($occ, $user["occupations"])) {
+                    $user["occupations"][] = $occ;
+                }
+            }
+
+            if (!empty($row["sid"])) {
+                $soc = [
+                    "id"             => $row["sid"],
+                    "alumni_id"      => $row["salumni_id"],
+                    "platform_id"    => $row["splatform_id"],
+                    "url"            => $row["surl"],
+                    "platform"       => $row["plname"],
+                ];
+
+                if (!in_array($soc, $user["socials"])) {
+                    $user["socials"][] = $soc;
+                }
+            }
+        }
+
+        return self::format($user);
+    }
+
+    public function getAlumniByProfileId($profileId)
+    {
+        $statement = $this->pdo->prepare("
+            SELECT
+                u.id AS uid,
+                u.email AS uemail,
+                u.role AS urole,
+                u.enabled AS uenabled,
+                u.created_at AS ucreated_at,
+                u.updated_at AS uupdated_at,
+                p.id AS pid,
+                p.user_id AS puser_id,
+                p.name_extension AS pname_extension,
+                p.first_name AS pfirst_name,
+                p.middle_name AS pmiddle_name,
+                p.last_name AS plast_name,
+                p.birth_date AS pbirth_date,
+                p.birth_place AS pbirth_place,
+                p.gender AS pgender,
+                p.student_number AS pstudent_number,
+                p.graduation_year AS pgraduation_year,
+                p.phone_number AS pphone_number,
+                p.course_id AS pcourse_id,
+                p.civil_status AS pcivil_status,
+                p.address AS paddress,
+                p.employment_status AS pemployment_status,
+                p.file_profile_picture AS pfile_profile_picture,
+                p.file_cv AS pfile_cv,
+                p.ver_stat_dean AS pver_stat_dean,
+                p.created_at AS pcreated_at,
+                p.updated_at AS pupdated_at,
+                c.id AS cid,
+                c.school_id AS cschool_id,
+                c.name AS cname,
+                c.code AS ccode,
+                os.id AS osid,
+                os.alumni_id AS osalumni_id,
+                os.occupation_id AS osoccupation_id,
+                os.address AS osaddress,
+                os.is_current AS osis_current,
+                o.occupation AS ooccupation,
+                s.id AS sid,
+                s.alumni_id AS salumni_id,
+                s.platform_id AS splatform_id,
+                s.url AS surl,
+                pl.name AS plname
+            FROM users u
+            JOIN alumni p ON p.user_id = u.id
+            JOIN courses c ON c.id = p.course_id
+            LEFT JOIN occupation_statuses os ON os.alumni_id = p.id
+            JOIN occupations o ON o.id = os.occupation_id
+            LEFT JOIN socials s ON s.alumni_id = p.id
+            JOIN platforms pl ON pl.id = s.platform_id
+            WHERE p.id = ? AND u.role = 'alumni'
+        ");
+        $statement->execute([$profileId]);
         $rows = $statement->fetchAll();
 
         if (empty($rows)) {

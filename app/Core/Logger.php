@@ -7,6 +7,7 @@ class Logger
     public const ERR_DATABASE = "database_error";
     public const ERR_VALIDATION = "validation_error";
     public const ERR_FILE_SYSTEM = "err_file_system";
+    public const ERR_MAILING_SERVICE = "err_mailing_service";
     
     private static string $logDir = __DIR__ . "/../../logs";
 

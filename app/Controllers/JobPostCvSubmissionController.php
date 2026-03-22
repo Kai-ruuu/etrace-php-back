@@ -12,6 +12,10 @@ require_once __DIR__ . "/../Middlewares/UserGuard.php";
 
 class JobPostCvSubmissionController
 {
+    protected $pdo;
+    protected $jobPostModel;
+    protected $model;
+
     public function __construct($pdo)
     {
         $this->pdo = $pdo;

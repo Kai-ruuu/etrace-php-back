@@ -7,12 +7,15 @@ require_once __DIR__ . "/app/Controllers/SchoolController.php";
 require_once __DIR__ . "/app/Controllers/CourseController.php";
 require_once __DIR__ . "/app/Controllers/JobPostController.php";
 require_once __DIR__ . "/app/Controllers/PlatformController.php";
+require_once __DIR__ . "/app/Controllers/AnalyticsController.php";
 require_once __DIR__ . "/app/Controllers/GraduateRecordController.php";
 require_once __DIR__ . "/app/Controllers/JobPostLikeController.php";
 require_once __DIR__ . "/app/Controllers/JobPostCvSubmissionController.php";
 
 $router->get("/api/auth/logout", [AuthController::class, "logout"]);
 $router->post("/api/auth", [AuthController::class, "login"]);
+
+$router->get("/api/analytics", [AnalyticsController::class, "get"]);
 
 $router->get("/api/schools", [SchoolController::class, "getAll"]);
 $router->get("/api/schools/active", [SchoolController::class, "getAllActive"]);
@@ -102,6 +105,8 @@ $router->get("/api/users/alumni/search", [UserController::class, "searchAlumni"]
 $router->get("/api/users/alumni/{id}/profile", [UserController::class, "viewAlumniProfile"]);
 $router->get("/api/users/alumni/posts/search", [JobPostController::class, "searchAsAlumni"]);
 $router->get("/api/users/alumni/{id}/rejection-appeals", [ProfileController::class, "getAlumniRejectionAppeals"]);
+$router->patch("/api/users/alumni/{id}/enable", [UserController::class, "enableAlumni"]);
+$router->patch("/api/users/alumni/{id}/disable", [UserController::class, "disableAlumni"]);
 $router->patch("/api/users/alumni/{id}/pend", [ProfileController::class, "pendAlumni"]);
 $router->patch("/api/users/alumni/{id}/verify", [ProfileController::class, "verifyAlumni"]);
 $router->patch("/api/users/alumni/{id}/reject", [ProfileController::class, "rejectAlumni"]);

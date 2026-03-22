@@ -4,6 +4,7 @@ require_once __DIR__ . "/Logger.php";
 
 class Router
 {
+    protected $pdo;
     private $routes = [];
     private $rateLimitConfig = [
         'max_requests' => 60,
@@ -41,33 +42,6 @@ class Router
         $key = $this->getRateLimitKey();
         $now = time();
 
-        if (function_exists('apcu_fetch')) {
-            return $this->checkRateLimitApcu($key, $now, $max, $window);
-        }
-
-        return $this->checkRateLimitFile($key, $now, $max, $window);
-    }
-
-    private function checkRateLimitApcu(string $key, int $now, int $max, int $window): bool
-    {
-        $data = apcu_fetch($key, $success);
-
-        if (!$success || $now - $data['start'] >= $window) {
-            apcu_store($key, ['start' => $now, 'count' => 1], $window);
-            return true;
-        }
-
-        if ($data['count'] >= $max) {
-            return false;
-        }
-
-        $data['count']++;
-        apcu_store($key, $data, $window - ($now - $data['start']));
-        return true;
-    }
-
-    private function checkRateLimitFile(string $key, int $now, int $max, int $window): bool
-    {
         $dir  = sys_get_temp_dir() . '/rate_limits';
         $file = "$dir/$key.json";
 

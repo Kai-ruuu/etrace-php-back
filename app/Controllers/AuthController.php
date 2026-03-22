@@ -12,6 +12,8 @@ require_once __DIR__ . "/../../utils/AuthToken.php";
 
 class AuthController
 {   
+    protected $model;
+    
     public function __construct($pdo)
     {
         $this->model = new User($pdo);

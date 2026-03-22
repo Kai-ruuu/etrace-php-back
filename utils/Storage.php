@@ -21,7 +21,7 @@ class Storage
         "cv" => "/alumni/cv",
     ];
 
-    public static function dest($dirkey)
+    public static function dest($dirkey): string
     {
         return self::$uploadsDir . self::$subdirs[$dirkey];
     }
@@ -51,7 +51,7 @@ class Storage
         $filePath = $sourceDir . "/" . $file;
 
         if (!is_dir($sourceDir)) {
-            Logger::error(Logger::ERR_FILE_SYSTEM, "Directory {$dir} does not exist.");
+            Logger::error(Logger::ERR_FILE_SYSTEM, "Directory {$sourceDir} does not exist.");
             return false;
         }
 
