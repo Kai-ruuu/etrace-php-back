@@ -7,6 +7,7 @@ require_once __DIR__ . "/../Core/Constants.php";
 require_once __DIR__ . "/../Core/Validator.php";
 require_once __DIR__ . "/../Models/Vacancy.php";
 require_once __DIR__ . "/../Models/User.php";
+require_once __DIR__ . "/../Models/Social.php";
 require_once __DIR__ . "/../Models/Profile.php";
 require_once __DIR__ . "/../Models/CompanyRevisionAppeal.php";
 require_once __DIR__ . "/../Models/CompanyRevisionMessage.php";
@@ -30,6 +31,7 @@ class ProfileController
     protected $companyRejectionAppealModel;
     protected $companyRevisionMessageModel;
     protected $companyRejectionMessageModel;
+    protected $socialModel;
     protected $alumniRejectionAppealModel;
     protected $alumniRejectionMessageModel;
 
@@ -43,6 +45,7 @@ class ProfileController
         $this->companyRejectionAppealModel = new CompanyRejectionAppeal($pdo);
         $this->companyRevisionMessageModel = new CompanyRevisionMessage($pdo);
         $this->companyRejectionMessageModel = new CompanyRejectionMessage($pdo);
+        $this->socialModel = new Social($pdo);
         $this->alumniRejectionAppealModel = new AlumniRejectionAppeal($pdo);
         $this->alumniRejectionMessageModel = new AlumniRejectionMessage($pdo);
         $mailingCfg = MailingConfig::buildFromEnv();
@@ -461,7 +464,6 @@ class ProfileController
         
         if (in_array($companyProfile["ver_stat_pstaff"], ["Pending", "Verified"])) {
             $companyProfile["ver_stat_pstaff"] = "Pending";
-            // $companyProfile["stat_" . $fileKey] = "Pending";
         }
         
         $tookEffect = $this->model->updateCompanyById($companyProfile["id"], $companyProfile);
@@ -628,6 +630,110 @@ class ProfileController
         }
         
         Response::json(["message" => "Vacancy has been removed."]);
+    }
+
+    public function updateAlumniPersonalInfo()
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::ALUMNI]);
+        $civilStatus = Validator::validateEnum("civil status", Request::fromBody("civil_status"), [
+            'Single', 'Married', 'Widowed', 'Separated'
+        ]);
+        $profile = $this->model->getAlumniById($cUser["profile"]["id"]);
+
+        if (!$profile) {
+            Response::json(["message" => "Alumni profile not found."], 404);
+        }
+
+        $profile["civil_status"] = $civilStatus;
+        $tookEffect = $this->model->updateAlumniById($profile["id"], $profile);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to update profile information."], 500);
+        }
+
+        Response::json(["message" => "Profile information has been updated."]);
+    }
+
+    public function updateAlumniContactInfo()
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::ALUMNI]);
+        $phoneNumber = Validator::validateText("phone number", Request::fromBody("phone_number"), "11-25");
+        $address = Validator::validateText("address", Request::fromBody("address"), "1-512");
+        $profile = $this->model->getAlumniById($cUser["profile"]["id"]);
+
+        if (!$profile) {
+            Response::json(["message" => "Alumni profile not found."], 404);
+        }
+
+        $profile["phone_number"] = $phoneNumber;
+        $profile["address"] = $address;
+        $tookEffect = $this->model->updateAlumniById($profile["id"], $profile);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to update contact information."], 500);
+        }
+
+        Response::json(["message" => "Contact information has been updated."]);
+    }
+
+    public function updateAlumniCareerInfo() {
+        $cUser = UserGuard::run($this->pdo, [Role::ALUMNI]);
+        $profile = $this->model->getAlumniById($cUser["profile"]["id"]);
+
+        $employmentStatus = Validator::validateEnum("employment status", Request::fromBody("employment_status"), [
+            "Unemployed", "Employed", "Self-employed",
+        ]);
+        $occupations = json_decode(Request::fromBody("occupations"), true);
+
+        if (!$profile) {
+            Response::json(["message" => "Profile not found."], 404);
+        }
+
+        $tookEffect = $this->model->updateAlumniCareerInfoById($profile["id"], [
+            "employment_status" => $employmentStatus,
+            "occupations" => $occupations,
+        ]);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to update career information"], 500);
+        }
+
+        Response::json(["message" => "Career information has been updated."]);
+    }
+
+    public function createAlumniSocial() {
+        $cUser = UserGuard::run($this->pdo, [Role::ALUMNI]);
+        $platform = Validator::validateText("platform", Request::fromBody("platform"), "1-25");
+        $url = Validator::validateText("url", Request::fromBody("url"), "1-512");
+        $alumniId = $cUser["profile"]["id"];
+
+        $newSocialId = $this->socialModel->create([
+            "platform" => $platform,
+            "url" => $url,
+            "alumni_id" => $alumniId,
+        ]);
+
+        if (!$newSocialId) {
+            Response::json(["message" => "Unable to add social."], 500);
+        }
+
+        Response::json([
+            "message" => "Social has been added.",
+            "id" => $newSocialId
+        ], 201);
+    }
+
+    public function deleteAlumniSocialById($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::ALUMNI]);
+        $id = Validator::validateInteger("id", $id);
+        $tookEffect = $this->socialModel->deleteById($id);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Unable to remove social."], 500);
+        }
+
+        Response::json(["message" => "Social has been removed."], 201);
     }
 
     public function pendAlumni($id)

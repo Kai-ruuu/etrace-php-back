@@ -4,8 +4,7 @@ class Password
 {
     public static function generate($show = false, $len = 8)
     {
-        $randPass = substr(base64_encode(random_bytes(16)), 0, $len);
-        return self::hash($randPass);
+        return substr(base64_encode(random_bytes(16)), 0, $len);
     }
     
     public static function hash($password)

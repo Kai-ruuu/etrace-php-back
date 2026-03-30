@@ -2,6 +2,8 @@
 
 class Occupation
 {
+    protected PDO $pdo;
+    
     public function __construct($pdo)
     {
         $this->pdo = $pdo;
@@ -15,5 +17,12 @@ class Occupation
         ");
         $statement->execute([$id]);
         return $statement->fetch();
+    }
+
+    public function getAll()
+    {
+        $statement = $this->pdo->prepare("SELECT * FROM occupations");
+        $statement->execute();
+        return $statement->fetchAll();
     }
 }

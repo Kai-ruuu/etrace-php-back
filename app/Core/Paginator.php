@@ -110,6 +110,9 @@ class Paginator
                                     "occupation"    => $result["ooccupation"],
                                     "address"       => $result["osaddress"],
                                     "is_current"    => $result["osis_current"],
+                                    "company"       => $result["oscompany"],
+                                    "start_year"    => $result["osstart_year"],
+                                    "end_year"      => $result["osend_year"],
                                 ];
                             }
                         }

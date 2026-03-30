@@ -16,8 +16,15 @@ class AnalyticsController
 
     public function get()
     {
-        $user = UserGuard::run($this->pdo, Role::all());
+        $user = UserGuard::run($this->pdo, [Role::SYSAD, Role::DEAN, Role::PSTAFF]);
         $analytics = $this->model->getByRole($user);
         Response::json($analytics);
+    }
+
+    public function getReport()
+    {
+        $user = UserGuard::run($this->pdo, [Role::SYSAD, Role::DEAN, Role::PSTAFF]);
+        $this->model->getReportByRole($user);
+        exit;
     }
 }

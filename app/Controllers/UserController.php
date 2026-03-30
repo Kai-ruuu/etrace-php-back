@@ -7,21 +7,28 @@ require_once __DIR__ . "/../Core/Constants.php";
 require_once __DIR__ . "/../Core/Validator.php";
 require_once __DIR__ . "/../Core/Paginator.php";
 require_once __DIR__ . "/../Models/User.php";
+require_once __DIR__ . "/../Models/GraduateRecord.php";
+require_once __DIR__ . "/../Models/PasswordForgot.php";
 require_once __DIR__ . "/../Middlewares/UserGuard.php";
 require_once __DIR__ . "/../../utils/Upload.php";
 require_once __DIR__ . "/../../utils/Password.php";
+require_once __DIR__ . "/../../utils/AlumniPreVerifier.php";
 require_once __DIR__ . "/../Services/MailingService.php";
 
 class UserController
 {   
-    protected $pdo;
-    protected $model;
+    protected PDO $pdo;
     protected MailingService $mailingSvc;
+    protected User $model;
+    protected GraduateRecord $recordModel;
+    protected PasswordForgot $passForgModel;
     
     public function __construct($pdo)
     {
         $this->pdo = $pdo;
         $this->model = new User($pdo);
+        $this->recordModel = new GraduateRecord($pdo);
+        $this->passForgModel = new PasswordForgot($pdo);
         $mailingCfg = MailingConfig::buildFromEnv();
         $this->mailingSvc = new MailingService($mailingCfg);
     }
@@ -29,7 +36,7 @@ class UserController
     public function createSysad()
     {
         $cUser = UserGuard::run($this->pdo, [Role::SYSAD], Action::CREATE_SYSADS);
-        $passwordHash = Password::generate();
+        $password = Password::generate();
         $validated = Validator::batchValidate([
             [Validator::EMAIL, "email", Request::fromBody("email")],
             [Validator::TEXT, "first name", Request::fromBody("first_name"), "1-50"],
@@ -43,7 +50,7 @@ class UserController
 
         $userId = $this->model->createSysad([
             "email" => $validated["email"],
-            "password_hash" => $passwordHash,
+            "password_hash" => Password::hash($password),
             "first_name" => $validated["first name"],
             "middle_name" => $validated["middle name"],
             "last_name" => $validated["last name"],
@@ -54,7 +61,7 @@ class UserController
         }
 
         $user = $this->model->getSysadById($userId);
-        $sent = $this->mailingSvc->sendNewlyAssignedMail($cUser, $user);
+        $sent = $this->mailingSvc->sendNewlyAssignedMail($cUser, $user, $password);
 
         if ($sent) {
             Logger::info("Assignment email sent");
@@ -87,7 +94,8 @@ class UserController
                 p.user_id AS puser_id,
                 p.first_name AS pfirst_name,
                 p.middle_name AS pmiddle_name,
-                p.last_name AS plast_name
+                p.last_name AS plast_name,
+                p.agreed_to_consent AS pagreed_to_consent
             FROM users u
             JOIN sysads p ON p.user_id = u.id
             ",
@@ -166,7 +174,7 @@ class UserController
     public function createDean()
     {
         $cUser = UserGuard::run($this->pdo, [Role::SYSAD], Action::CREATE_DEANS);
-        $passwordHash = Password::generate();
+        $password = Password::generate();
         $validated = Validator::batchValidate([
             [Validator::EMAIL, "email", Request::fromBody("email")],
             [Validator::TEXT, "first name", Request::fromBody("first_name"), "1-50"],
@@ -181,7 +189,7 @@ class UserController
 
         $userId = $this->model->createDean([
             "email" => $validated["email"],
-            "password_hash" => $passwordHash,
+            "password_hash" => Password::hash($password),
             "first_name" => $validated["first name"],
             "middle_name" => $validated["middle name"],
             "last_name" => $validated["last name"],
@@ -193,7 +201,7 @@ class UserController
         }
 
         $user = $this->model->getDeanById($userId);
-        $this->mailingSvc->sendNewlyAssignedMail($cUser, $user);
+        $this->mailingSvc->sendNewlyAssignedMail($cUser, $user, $password);
         Response::json($user, 201);
     }
 
@@ -222,6 +230,7 @@ class UserController
                 p.first_name AS pfirst_name,
                 p.middle_name AS pmiddle_name,
                 p.last_name AS plast_name,
+                p.agreed_to_consent AS pagreed_to_consent,
                 s.id AS sid,
                 s.name AS sname
             FROM users u
@@ -297,7 +306,7 @@ class UserController
     public function createPstaff()
     {
         $cUser = UserGuard::run($this->pdo, [Role::SYSAD], Action::CREATE_PSTAFFS);
-        $passwordHash = Password::generate();
+        $password = Password::generate();
         $validated = Validator::batchValidate([
             [Validator::EMAIL, "email", Request::fromBody("email")],
             [Validator::TEXT, "first name", Request::fromBody("first_name"), "1-50"],
@@ -311,7 +320,7 @@ class UserController
 
         $userId = $this->model->createPstaff([
             "email" => $validated["email"],
-            "password_hash" => $passwordHash,
+            "password_hash" => Password::hash($password),
             "first_name" => $validated["first name"],
             "middle_name" => $validated["middle name"],
             "last_name" => $validated["last name"],
@@ -322,7 +331,7 @@ class UserController
         }
 
         $user = $this->model->getPstaffById($userId);
-        $this->mailingSvc->sendNewlyAssignedMail($cUser, $user);
+        $this->mailingSvc->sendNewlyAssignedMail($cUser, $user, $password);
         Response::json($user, 201);
     }
 
@@ -348,7 +357,8 @@ class UserController
                 p.user_id AS puser_id,
                 p.first_name AS pfirst_name,
                 p.middle_name AS pmiddle_name,
-                p.last_name AS plast_name
+                p.last_name AS plast_name,
+                p.agreed_to_consent AS pagreed_to_consent
             FROM users u
             JOIN pstaffs p ON p.user_id = u.id
             ",
@@ -656,10 +666,6 @@ class UserController
     {
         $cUser = UserGuard::run($this->pdo, Role::all());
 
-        if ($cUser["email"] === $_ENV["SYSAD_EMAIL"]) {
-            Response::json(["message" => "User info should not be modified."], 403);
-        }
-        
         $validated = Validator::batchValidate([
             [Validator::TEXT, "current password", Request::fromBody("current_password"), "8-65"],
             [Validator::TEXT, "new password", Request::fromBody("new_password"), "8-65"],
@@ -734,10 +740,39 @@ class UserController
         $occupations = [];
 
         foreach($initialOccupations as $occu) {
-            $occupation = Validator::validateText("occupation", $occu["occupation"], "1-255");
+            $occupation = Validator::validateText("occupation", trim($occu["occupation"]), "1-255");
+            $company = Validator::validateText("company", trim($occu["company"]), "1-512");
             $address = Validator::validateText("address", trim($occu["address"] ?? ""), "1-512");
+            $startYear = Validator::validateInteger("start year", $occu["start_year"] ?? null);
+            $endYear = isset($occu["end_year"]) && $occu["end_year"] !== null 
+                ? Validator::validateInteger("end year", $occu["end_year"]) 
+                : null;
             $isCurrent = Validator::validateBoolean("is current", $occu["is_current"]);
-            $occupations[] = ["occupation" => $occupation, "address" => $address, "is_current" => $isCurrent];
+
+            if ($startYear === null) {
+                Response::json(["message" => "Start year is required."], 400);
+            }
+
+            if (!$isCurrent && $endYear === null) {
+                Response::json(["message" => "End year is required for non-current occupations."], 400);
+            }
+            
+            if ($endYear !== null && $startYear > $endYear) {
+                Response::json(["message" => "Start year should be earlier than end year."], 400);
+            }
+            
+            if ($endYear !== null && $isCurrent) {
+                Response::json(["message" => "A current occupation cannot have an end year."], 400);
+            }
+            
+            $occupations[] = [
+                "occupation" => $occupation,
+                "company" => $company,
+                "address" => $address,
+                "start_year" => $startYear,
+                "end_year" => $endYear,
+                "is_current" => $isCurrent,
+            ];
         }
         
         // extract socials
@@ -766,7 +801,7 @@ class UserController
         // create user
         $passwordHash = Password::hash($validated["password"]);
         
-        $userId = $this->model->createAlumni([
+        $createInfo = [
             "email" => $validated["email"],
             "password_hash" => $passwordHash,
             "last_name" => $validated["last name"],
@@ -787,7 +822,14 @@ class UserController
             "occupations" => $occupations,
             "file_profile_picture" => $uploads->getFilename(0),
             "file_cv" => $uploads->getFilename(1),
-        ]);
+        ];
+        
+        // perform alumni pre-verification here
+        $dbRecord = $this->recordModel->getByCourseIdAndYear($validated["course id"], $validated["graduation year"]);
+        $recordPath = Storage::dest("graduate_records") . "/" . $dbRecord["filename"];
+        $createInfo["ver_stat_dean"] = AlumniPreVerifier::preverify($recordPath, $createInfo);
+        
+        $userId = $this->model->createAlumni($createInfo);
 
         if ($userId === null) {
             $uploads->rollback();
@@ -796,6 +838,15 @@ class UserController
 
         $uploads->commit();
 
+        $alumni = $this->model->getAlumniById($userId);
+
+        error_log("Verification Status: " . $createInfo["ver_stat_dean"]);
+        Logger::logArray("Alumni", $alumni);
+
+        if ($createInfo["ver_stat_dean"] === "Verified") {
+            $this->mailingSvc->sendAlumniAutoVerifiedMail($alumni);
+        }
+        
         Response::json(["message" => "You are now registered! Welcome to E-trace."], 201);
     }
 
@@ -849,6 +900,9 @@ class UserController
                 os.occupation_id AS osoccupation_id,
                 os.address AS osaddress,
                 os.is_current AS osis_current,
+                os.company AS oscompany,
+                os.start_year AS osstart_year,
+                os.end_year AS osend_year,
                 o.occupation AS ooccupation,
                 s.id AS sid,
                 s.alumni_id AS salumni_id,
@@ -965,5 +1019,93 @@ class UserController
         }
 
         Response::json($alumni);
+    }
+
+    public function sendResetEmail()
+    {
+        $email = Validator::validateEmail("email", Request::fromBody("email"));
+        $user = $this->model->getByEmail($email);
+
+        if (!$user) {
+            Response::json(["message" => "Invalid email address."], 404);
+        }
+        
+        $token = bin2hex(random_bytes(15));
+
+        if (!$this->passForgModel->create($user["id"], $token)) {
+            Response::json(["message" => "Failed to send password reset email."], 500);
+        }
+
+        $resetUrl = null;
+        
+        if ($_ENV["APP_ENV"] === "development") {
+            $resetUrl = "http://localhost:5173/reset-password?token={$token}";
+        } else {
+            $resetUrl = $_ENV["APP_FRONTEND_URL"] . "/reset-password?token={$token}";
+        }
+
+        if (!$this->mailingSvc->sendPasswordResetMail($email, $resetUrl)) {
+            Response::json(["message" => "Failed to send password reset email."], 500);
+        }
+
+        Response::json(["message" => "Password reset email has been sent. Please check your inbox."]);
+    }
+
+    public function resetPassword()
+    {
+        $token = Validator::validateText("token", Request::fromQuery("token", ""), "30-30");
+        $password = Validator::validateText("password", Request::fromBody("password", ""), "8-65");
+        $passwordForgot = $this->passForgModel->getByToken($token);
+
+        if (!$passwordForgot) {
+            Response::json(["message" => "Invalid password reset token."], 400);
+        }
+
+        if ($passwordForgot["used"]) {
+            Response::json(["message" => "Password reset token was already used."], 400);
+        }
+
+        if ($passwordForgot["expired"]) {
+            Response::json(["message" => "Password reset token was already expired."], 400);
+        }
+
+        $expiresAt = new DateTime($passwordForgot["expires_at"]);
+        $now = new DateTime();
+        
+        if ($now > $expiresAt) {
+            $passwordForgot["expired"] = true;
+            $this->passForgModel->updateById($passwordForgot["id"], $passwordForgot);
+            Response::json(["message" => "Password reset token was already expired."], 400);
+        }
+
+        $user = $this->model->getById($passwordForgot["user_id"]);
+
+        if (!$user) {
+            Response::json(["message" => "Invalid password reset token."], 400);
+        }
+
+        $user["password_hash"] = Password::hash($password);
+        $tookEffect = $this->model->updateById($user["id"], $user);
+
+        $passwordForgot["used"] = true;
+        $this->passForgModel->updateById($passwordForgot["id"], $passwordForgot);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Failed to reset password."], 500);
+        }
+
+        Response::json(["message" => "Your password has been reset. You may now login using your new password."]);
+    }
+
+    public function agreeToConsent()
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::SYSAD, Role::DEAN, Role::PSTAFF]);
+        $tookEffect = $this->model->agreeToConsent($cUser["role"], $cUser["profile"]["id"]);
+
+        if (!$tookEffect) {
+            Response::json(["message" => "Failed to agree."], 500);
+        }
+
+        Response::json(["message" => "Welcome to E-trace!"]);
     }
 }

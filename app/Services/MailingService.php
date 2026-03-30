@@ -4,7 +4,6 @@ require_once __DIR__ . "/../Core/Logger.php";
 require_once __DIR__ . "/../Core/Constants.php";
 
 use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
 
 class MailingConfig
 {
@@ -56,9 +55,11 @@ class MailingConfig
 class MailingService
 {
     protected PHPMailer $mail;
+    protected MailingConfig $config;
 
     public function __construct(MailingConfig $config)
     {
+        $this->config = $config;
         $this->mail = new PHPMailer(true);
         $this->mail->isSMTP();
         $this->mail->Host = $config->host;
@@ -79,6 +80,7 @@ class MailingService
             $this->mail->Subject = $subject;
             $this->mail->Body    = $body;
             $this->mail->send();
+            error_log("[MAILING SERVICE] Email sent.");
             return true;
         } catch (Exception $e) {
             Logger::error(Logger::ERR_MAILING_SERVICE, $e->getMessage());
@@ -86,8 +88,7 @@ class MailingService
         }
     }
 
-    // tested and working
-    public function sendNewlyAssignedMail($sysad, $targetUser): bool
+    public function sendNewlyAssignedMail($sysad, $targetUser, $defaultPassword): bool
     {
         $sRole  = "System Administrator";
         $sEmail = $sysad['email'];
@@ -127,6 +128,23 @@ class MailingService
                                     <p style='margin:0 0 24px; font-size:15px; color:#111827; line-height:1.6;'>
                                         You have been assigned as a <strong>{$tRole}</strong> on E-trace by a <strong>{$sRole}</strong>. Your account is now active and ready to use.
                                     </p>
+
+                                    <!-- Default Credentials -->
+                                    <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                                        <tr>
+                                            <td style='background-color:#eff6ff; border:1px solid #bfdbfe; border-left: 3px solid #3b82f6; border-radius:6px; padding:16px;'>
+                                                <p style='margin:0 0 10px; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;'>Your Default Credentials</p>
+                                                <p style='margin:0 0 6px; font-size:14px; color:#374151;'>
+                                                    <strong>Email:</strong> <a href='mailto:{$tEmail}' style='color:#3b82f6; text-decoration:none;'>{$tEmail}</a>
+                                                </p>
+                                                <p style='margin:0 0 12px; font-size:14px; color:#374151;'>
+                                                    <strong>Password:</strong> <code style='background-color:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:4px; font-size:13px;'>{$defaultPassword}</code>
+                                                </p>
+                                                <p style='margin:0; font-size:12px; color:#6b7280;'>⚠️ Please change your password after your first login.</p>
+                                            </td>
+                                        </tr>
+                                    </table>
+
                                     <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
                                         <tr>
                                             <td style='background-color:#f0fdf4; border:1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius:6px; padding:16px;'>
@@ -938,6 +956,167 @@ class MailingService
         ";
 
         return $this->send($aEmail, $aEmail, $dEmail, $subject, $body);
+    }
+
+    public function sendAlumniAutoVerifiedMail($alumni): bool
+    {
+        $aEmail  = $alumni['email'];
+        $subject = "Your E-trace Alumni Account Has Been Automatically Verified";
+
+        $body = "
+        <!DOCTYPE html>
+        <html lang='en'>
+        <head>
+            <meta charset='UTF-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>{$subject}</title>
+        </head>
+        <body style='margin:0; padding:0; background-color:#f9fafb; font-family: Arial, sans-serif;'>
+            <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#f9fafb; padding: 40px 0;'>
+                <tr>
+                    <td align='center'>
+                        <table width='560' cellpadding='0' cellspacing='0' style='background-color:#ffffff; border-radius:8px; border: 1px solid #e5e7eb; overflow:hidden;'>
+                            <tr>
+                                <td style='background-color:#ffffff; padding: 24px 32px; border-bottom: 1px solid #e5e7eb;'>
+                                    <table width='100%' cellpadding='0' cellspacing='0'>
+                                        <tr>
+                                            <td><span style='font-size:18px; font-weight:700; color:#111827; letter-spacing:1px;'>E-trace</span></td>
+                                            <td align='right'>
+                                                <span style='display:inline-block; background-color:#dcfce7; color:#16a34a; font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:1px;'>Auto-Verified</span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style='padding: 32px;'>
+                                    <p style='margin:0 0 16px; font-size:14px; color:#6b7280;'>Hello,</p>
+                                    <p style='margin:0 0 24px; font-size:15px; color:#111827; line-height:1.6;'>
+                                        Your alumni account on E-trace has been <strong style='color:#16a34a;'>automatically verified</strong>. Our system matched your registration details against our graduate records and found a sufficient match. Welcome to the E-trace alumni community!
+                                    </p>
+                                    <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                                        <tr>
+                                            <td style='background-color:#eff6ff; border:1px solid #bfdbfe; border-left: 3px solid #3b82f6; border-radius:6px; padding:16px;'>
+                                                <p style='margin:0 0 6px; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;'>How did this happen?</p>
+                                                <p style='margin:0; font-size:14px; color:#374151; line-height:1.6;'>
+                                                    When you registered, E-trace automatically compared your information against our graduate records. Your details met the required match threshold, so your account was verified instantly — no manual review needed.
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                                        <tr>
+                                            <td style='background-color:#f0fdf4; border:1px solid #bbf7d0; border-left: 3px solid #16a34a; border-radius:6px; padding:16px;'>
+                                                <p style='margin:0 0 6px; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;'>What you can do now</p>
+                                                <p style='margin:0; font-size:14px; color:#374151; line-height:1.6;'>
+                                                    You can now browse and search for job postings from verified companies on E-trace. Explore opportunities that match your course and career goals.
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                                        <tr>
+                                            <td style='background-color:#fffbeb; border:1px solid #fde68a; border-left: 3px solid #f59e0b; border-radius:6px; padding:16px;'>
+                                                <p style='margin:0 0 6px; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;'>Not you?</p>
+                                                <p style='margin:0; font-size:14px; color:#374151; line-height:1.6;'>
+                                                    If you did not register for an E-trace account or believe this verification was made in error, please contact your Dean immediately to have your account reviewed.
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <p style='margin:0; font-size:13px; color:#9ca3af; line-height:1.6;'>
+                                        If you have any concerns about your verification, please reach out to your Dean or the system administrator.
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style='background-color:#f9fafb; border-top:1px solid #e5e7eb; padding:20px 32px;'>
+                                    <p style='margin:0; font-size:12px; color:#9ca3af; line-height:1.5;'>This is an automated message from E-trace. Please do not reply directly to this email.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        ";
+
+        return $this->send($aEmail, $aEmail, $this->config->username, $subject, $body);
+    }
+
+    public function sendPasswordResetMail($targetEmail, $resetUrl): bool
+    {
+        $subject = "Reset Your E-trace Password";
+
+        $body = "
+        <!DOCTYPE html>
+        <html lang='en'>
+        <head>
+            <meta charset='UTF-8'>
+            <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+            <title>{$subject}</title>
+        </head>
+        <body style='margin:0; padding:0; background-color:#f9fafb; font-family: Arial, sans-serif;'>
+            <table width='100%' cellpadding='0' cellspacing='0' style='background-color:#f9fafb; padding: 40px 0;'>
+                <tr>
+                    <td align='center'>
+                        <table width='560' cellpadding='0' cellspacing='0' style='background-color:#ffffff; border-radius:8px; border: 1px solid #e5e7eb; overflow:hidden;'>
+                            <tr>
+                                <td style='background-color:#ffffff; padding: 24px 32px; border-bottom: 1px solid #e5e7eb;'>
+                                    <table width='100%' cellpadding='0' cellspacing='0'>
+                                        <tr>
+                                            <td><span style='font-size:18px; font-weight:700; color:#111827; letter-spacing:1px;'>E-trace</span></td>
+                                            <td align='right'>
+                                                <span style='display:inline-block; background-color:#dbeafe; color:#2563eb; font-size:11px; font-weight:600; padding:4px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:1px;'>Password Reset</span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style='padding: 32px;'>
+                                    <p style='margin:0 0 16px; font-size:14px; color:#6b7280;'>Hello,</p>
+                                    <p style='margin:0 0 24px; font-size:15px; color:#111827; line-height:1.6;'>
+                                        We received a request to <strong>reset your password</strong> for your E-trace account. Click the button below to proceed.
+                                    </p>
+                                    <table width='100%' cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                                        <tr>
+                                            <td style='background-color:#fffbeb; border:1px solid #fde68a; border-left: 3px solid #f59e0b; border-radius:6px; padding:16px;'>
+                                                <p style='margin:0 0 6px; font-size:11px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:1px;'>Important</p>
+                                                <p style='margin:0; font-size:14px; color:#374151; line-height:1.6;'>
+                                                    This link will expire in <strong>10 minutes</strong>. If you did not request a password reset, you can safely ignore this email.
+                                                </p>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <table cellpadding='0' cellspacing='0' style='margin-bottom:24px;'>
+                                        <tr>
+                                            <td style='background-color:#16a34a; border-radius:6px;'>
+                                                <a href='{$resetUrl}' style='display:inline-block; padding:10px 20px; font-size:13px; font-weight:600; color:#ffffff; text-decoration:none;'>Reset Password</a>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                    <p style='margin:0 0 24px; font-size:13px; color:#9ca3af;'>Or copy this link: <a href='{$resetUrl}' style='color:#16a34a; text-decoration:none;'>{$resetUrl}</a></p>
+                                    <p style='margin:0; font-size:14px; color:#6b7280; line-height:1.6;'>
+                                        If you did not request this, please contact support immediately.
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style='background-color:#f9fafb; border-top:1px solid #e5e7eb; padding:20px 32px;'>
+                                    <p style='margin:0; font-size:12px; color:#9ca3af; line-height:1.5;'>This is an automated message from E-trace. Please do not reply directly to this email.</p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
+        ";
+
+        return $this->send($targetEmail, $targetEmail, $this->config->username, $subject, $body);
     }
 
     public function sendAlumniRejectedMail($dean, $alumni, string $reason): bool

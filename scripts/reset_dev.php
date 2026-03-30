@@ -35,6 +35,7 @@ function runScript()
         "job_post_courses ",
         "job_post_likes",
         "job_post_cv_submissions",
+        "password_forgots",
     ];
 
     $pdo->exec("SET FOREIGN_KEY_CHECKS = 0");

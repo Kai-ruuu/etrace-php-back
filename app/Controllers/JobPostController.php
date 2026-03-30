@@ -237,8 +237,7 @@ class JobPostController
                     SELECT 1 FROM job_post_cv_submissions jps
                     WHERE
                         jps.job_post_id = jp.id AND
-                        jps.alumni_id = {$alumniId} AND
-                        jps.status = 'Pending'
+                        jps.alumni_id = {$alumniId}
                 ) AS is_submitted
             FROM job_posts jp
             JOIN job_post_courses jpc ON jpc.job_post_id = jp.id

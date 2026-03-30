@@ -51,4 +51,18 @@ class Logger
     {
         return $_ENV["APP_ENV"] === "development";
     }
+
+    public static function logArray(string $label, array $data, int $depth = 0): void
+    {
+        $indent = str_repeat("  ", $depth);
+        error_log("{$indent}--- $label ---");
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                self::logArray($key, $value, $depth + 1);
+            } else {
+                error_log("{$indent}  $key: $value");
+            }
+        }
+        error_log("{$indent}--- end $label ---");
+    }
 }

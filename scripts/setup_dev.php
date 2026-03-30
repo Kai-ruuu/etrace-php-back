@@ -49,6 +49,7 @@ function createTables($pdo)
         first_name VARCHAR(50) NOT NULL,
         middle_name VARCHAR(50) DEFAULT NULL,
         last_name VARCHAR(50) NOT NULL,
+        agreed_to_consent BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -62,6 +63,7 @@ function createTables($pdo)
         first_name VARCHAR(50) NOT NULL,
         middle_name VARCHAR(50) DEFAULT NULL,
         last_name VARCHAR(50) NOT NULL,
+        agreed_to_consent BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -75,6 +77,7 @@ function createTables($pdo)
         first_name VARCHAR(50) NOT NULL,
         middle_name VARCHAR(50) DEFAULT NULL,
         last_name VARCHAR(50) NOT NULL,
+        agreed_to_consent BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
@@ -193,11 +196,19 @@ function createTables($pdo)
         alumni_id INT NOT NULL,
         occupation_id INT NOT NULL,
         address VARCHAR(512) NOT NULL,
+        company VARCHAR(512) NOT NULL,
+        start_year INT NOT NULL,
+        end_year INT NULL,
         is_current BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (alumni_id) REFERENCES alumni(id) ON DELETE CASCADE,
-        FOREIGN KEY (occupation_id) REFERENCES occupations(id) ON DELETE CASCADE
+        FOREIGN KEY (occupation_id) REFERENCES occupations(id) ON DELETE CASCADE,
+        CONSTRAINT check_current CHECK (
+            (is_current = TRUE AND end_year IS NULL) OR
+            (is_current = FALSE AND end_year IS NOT NULL)
+        ),
+        CONSTRAINT check_years CHECK (end_year IS NULL OR end_year >= start_year)
     );
     ";
 
@@ -374,6 +385,19 @@ function createTables($pdo)
     );
     ";
 
+    $tables[] = "CREATE TABLE IF NOT EXISTS password_forgots(
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        token VARCHAR(30) NOT NULL,
+        used BOOLEAN DEFAULT FALSE,
+        expired BOOLEAN DEFAULT FALSE,
+        user_id INT NOT NULL,
+        expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL 10 MINUTE),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+    ";
+
     foreach ($tables as $sql) {
         $statement = $pdo->prepare($sql);
         $statement->execute();
@@ -404,8 +428,8 @@ function seedDefaultSysad($pdo)
         $pdo->beginTransaction();        
         $pdo->prepare("INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)")
             ->execute([$sysadEmail, $passwordHash, 'sysad']);
-        $pdo->prepare("INSERT INTO sysads (user_id, first_name, last_name) VALUES (?, ?, ?)")
-            ->execute([$pdo->lastInsertId(), $sysadFirstName, $sysadLastName]);
+        $pdo->prepare("INSERT INTO sysads (user_id, first_name, last_name, agreed_to_consent) VALUES (?, ?, ?, ?)")
+            ->execute([$pdo->lastInsertId(), $sysadFirstName, $sysadLastName, true]);
         $pdo->commit();
         Logger::info("Default system administrator has been created.");
     } catch (PDOException $e) {
@@ -583,13 +607,15 @@ function seedDefaultOccupations($pdo, $total)
 function seed($pdo)
 {
     seedDefaultSysad($pdo);
-    seedDefaultRegularSysad($pdo, 29);
+    seedDefaultRegularSysad($pdo, 2);
     seedDefaultSchoolsAndDeans($pdo, [
-        ["School of Computer Studies", 30],
-        ["School of Education", 30],
+        ["School of Computer Studies", 2],
+        ["School of Education", 2],
+        ["School of Hospitality and Tourism Management", 2],
+        ["School of Business and Management", 2],
     ]);
-    seedDefaultPstaff($pdo, 30);
-    seedDefaultOccupations($pdo, 30);
+    seedDefaultPstaff($pdo, 2);
+    seedDefaultOccupations($pdo, 2);
 }
 
 function runScript()

@@ -70,7 +70,8 @@ class User
                 p.user_id AS puser_id,
                 p.first_name AS pfirst_name,
                 p.middle_name AS pmiddle_name,
-                p.last_name AS plast_name
+                p.last_name AS plast_name,
+                p.agreed_to_consent AS pagreed_to_consent
             FROM users u
             JOIN sysads p ON p.user_id = u.id
             WHERE u.id = ? AND u.role = 'sysad'
@@ -127,6 +128,7 @@ class User
                 p.first_name AS pfirst_name,
                 p.middle_name AS pmiddle_name,
                 p.last_name AS plast_name,
+                p.agreed_to_consent AS pagreed_to_consent,
                 s.id AS sid,
                 s.name AS sname
             FROM users u
@@ -183,7 +185,8 @@ class User
                 p.user_id AS puser_id,
                 p.first_name AS pfirst_name,
                 p.middle_name AS pmiddle_name,
-                p.last_name AS plast_name
+                p.last_name AS plast_name,
+                p.agreed_to_consent AS pagreed_to_consent
             FROM users u
             JOIN pstaffs p ON p.user_id = u.id
             WHERE u.id = ? AND u.role = 'pstaff'
@@ -443,6 +446,7 @@ class User
         $occupations = $alumni["occupations"];
         $fileProfilePicture = $alumni["file_profile_picture"];
         $fileCv = $alumni["file_cv"];
+        $verStatDean = $alumni["ver_stat_dean"];
 
         try {
             $this->pdo->beginTransaction();
@@ -471,14 +475,15 @@ class User
                 employment_status,
                 file_profile_picture,
                 file_cv,
-                graduation_year
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+                graduation_year,
+                ver_stat_dean
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
             ->execute([
                 $userId, $nameExtension, $firstName, $middleName,
                 $lastName, $birthDate->format('Y-m-d'), $birthPlace, $gender, $studentNumber,
                 $phoneNumber, $courseId, $civilStatus, $address,
                 $employmentStatus, $fileProfilePicture, $fileCv,
-                $graduationYear
+                $graduationYear, $verStatDean
             ]);
 
             $alumniId = $this->pdo->lastInsertId();
@@ -496,9 +501,20 @@ class User
                     alumni_id,
                     occupation_id,
                     address,
-                    is_current
-                ) VALUES (?, ?, ?, ?)")
-                ->execute([$alumniId, $occupationId, $occupation["address"], $occupation["is_current"]]);
+                    is_current,
+                    company,
+                    start_year,
+                    end_year
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)")
+                ->execute([
+                    $alumniId,
+                    $occupationId,
+                    $occupation["address"],
+                    $occupation["is_current"],
+                    $occupation["company"],
+                    $occupation["start_year"],
+                    $occupation["end_year"],
+                ]);
             }
 
             // create socials
@@ -563,6 +579,9 @@ class User
                 os.occupation_id AS osoccupation_id,
                 os.address AS osaddress,
                 os.is_current AS osis_current,
+                os.company AS oscompany,
+                os.start_year AS osstart_year,
+                os.end_year AS osend_year,
                 o.occupation AS ooccupation,
                 s.id AS sid,
                 s.alumni_id AS salumni_id,
@@ -595,9 +614,12 @@ class User
                     "id"             => $row["osid"],
                     "alumni_id"      => $row["osalumni_id"],
                     "occupation_id"  => $row["osoccupation_id"],
+                    "occupation"     => $row["ooccupation"],
                     "address"        => $row["osaddress"],
                     "is_current"     => $row["osis_current"],
-                    "occupation"     => $row["ooccupation"],
+                    "company"        => $row["oscompany"],
+                    "start_year"     => $row["osstart_year"],
+                    "end_year"       => $row["osend_year"],
                 ];
                 
                 if (!in_array($occ, $user["occupations"])) {
@@ -722,6 +744,19 @@ class User
 
         return self::format($user);
     }
+
+    public function agreeToConsent($role, int $profileId) {
+        $roleTables = [
+            Role::SYSAD => "sysads",
+            Role::DEAN => "deans",
+            Role::PSTAFF => "pstaffs",
+        ];
+        $table = $roleTables[$role];
+        
+        $statement = $this->pdo->prepare("UPDATE {$table} SET agreed_to_consent = TRUE WHERE id = ?");
+        $statement->execute([$profileId]);
+        return $statement->rowCount() > 0;
+    }
     
     public static function format($user)
     {
@@ -740,6 +775,7 @@ class User
                         "first_name" => $user["pfirst_name"],
                         "middle_name" => $user["pmiddle_name"],
                         "last_name" => $user["plast_name"],
+                        "agreed_to_consent" => $user["pagreed_to_consent"],
                     ]
                 ];
             case Role::DEAN:
@@ -755,6 +791,7 @@ class User
                         "first_name" => $user["pfirst_name"],
                         "middle_name" => $user["pmiddle_name"],
                         "last_name" => $user["plast_name"],
+                        "agreed_to_consent" => $user["pagreed_to_consent"],
                         "school" => [
                             "id" => $user["sid"],
                             "name" => $user["sname"],
@@ -774,6 +811,7 @@ class User
                         "first_name" => $user["pfirst_name"],
                         "middle_name" => $user["pmiddle_name"],
                         "last_name" => $user["plast_name"],
+                        "agreed_to_consent" => $user["pagreed_to_consent"],
                     ]
                 ];
             case Role::COMPANY:

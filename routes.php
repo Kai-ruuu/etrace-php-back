@@ -7,6 +7,7 @@ require_once __DIR__ . "/app/Controllers/SchoolController.php";
 require_once __DIR__ . "/app/Controllers/CourseController.php";
 require_once __DIR__ . "/app/Controllers/JobPostController.php";
 require_once __DIR__ . "/app/Controllers/PlatformController.php";
+require_once __DIR__ . "/app/Controllers/OccupationController.php";
 require_once __DIR__ . "/app/Controllers/AnalyticsController.php";
 require_once __DIR__ . "/app/Controllers/GraduateRecordController.php";
 require_once __DIR__ . "/app/Controllers/JobPostLikeController.php";
@@ -16,6 +17,9 @@ $router->get("/api/auth/logout", [AuthController::class, "logout"]);
 $router->post("/api/auth", [AuthController::class, "login"]);
 
 $router->get("/api/analytics", [AnalyticsController::class, "get"]);
+$router->get("/api/analytics/report", [AnalyticsController::class, "getReport"]);
+
+$router->get("/api/occupations", [OccupationController::class, "getAll"]);
 
 $router->get("/api/schools", [SchoolController::class, "getAll"]);
 $router->get("/api/schools/active", [SchoolController::class, "getAllActive"]);
@@ -45,6 +49,9 @@ $router->patch("/api/records/{id}/archive", [GraduateRecordController::class, "a
 $router->patch("/api/records/{id}/restore", [GraduateRecordController::class, "restore"]);
 
 $router->get("/api/users/me", [UserController::class, "me"]);
+$router->post("/api/users/forgot-password", [UserController::class, "sendResetEmail"]);
+$router->patch("/api/users/reset-password", [UserController::class, "resetPassword"]);
+$router->patch("/api/users/agree-to-consent", [UserController::class, "agreeToConsent"]);
 $router->patch("/api/users/change-password", [UserController::class, "changePassword"]);
 
 $router->get("/api/users/sysad/search", [UserController::class, "searchSysads"]);
@@ -111,12 +118,15 @@ $router->patch("/api/users/alumni/{id}/pend", [ProfileController::class, "pendAl
 $router->patch("/api/users/alumni/{id}/verify", [ProfileController::class, "verifyAlumni"]);
 $router->patch("/api/users/alumni/{id}/reject", [ProfileController::class, "rejectAlumni"]);
 $router->post("/api/users/alumni", [UserController::class, "createAlumni"]);
+$router->post("/api/users/alumni/social", [ProfileController::class, "createAlumniSocial"]);
 $router->post("/api/users/alumni/rejection-appeal", [ProfileController::class, "writeAlumniRejectionAppeal"]);
+$router->patch("/api/users/alumni/update-career", [ProfileController::class, "updateAlumniCareerInfo"]);
+$router->patch("/api/users/alumni/update-contact", [ProfileController::class, "updateAlumniContactInfo"]);
+$router->patch("/api/users/alumni/update-personal", [ProfileController::class, "updateAlumniPersonalInfo"]);
+$router->delete("/api/users/alumni/{id}/social", [ProfileController::class, "deleteAlumniSocialById"]);
 
 $router->patch("/api/users/profiles/sysad", [ProfileController::class, "updateSysad"]);
-
 $router->patch("/api/users/profiles/dean", [ProfileController::class, "updateDean"]);
-
 $router->patch("/api/users/profiles/pstaff", [ProfileController::class, "updatePstaff"]);
 
 $router->get("/api/platforms", [PlatformController::class, "all"]);

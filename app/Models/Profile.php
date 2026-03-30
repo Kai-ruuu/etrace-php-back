@@ -246,43 +246,87 @@ class Profile
 
     public function updateAlumniById($id, $alumni)
     {
-        $statement = $this->pdo->prepare("
-            UPDATE alumni
-            SET
-                name_extension = ?,
-                first_name = ?,
-                middle_name = ?,
-                last_name = ?,
-                birth_date = ?,
-                birth_place = ?,
-                gender = ?,
-                student_number = ?,
-                phone_number = ?,
-                civil_status = ?,
-                employment_status = ?,
-                file_profile_picture = ?,
-                file_cv = ?,
-                ver_stat_dean = ?
-            WHERE id = ?
-        ");
-        $statement->execute([
-            $alumni["name_extension"],
-            $alumni["first_name"],
-            $alumni["middle_name"],
-            $alumni["last_name"],
-            $alumni["birth_date"],
-            $alumni["birth_place"],
-            $alumni["gender"],
-            $alumni["student_number"],
-            $alumni["phone_number"],
-            $alumni["civil_status"],
-            $alumni["employment_status"],
-            $alumni["file_profile_picture"],
-            $alumni["file_cv"],
-            $alumni["ver_stat_dean"],
-            $id
-        ]);
-        return $statement->rowCount() > 0;
+        try {
+            $statement = $this->pdo->prepare("
+                UPDATE alumni
+                SET
+                    name_extension = ?,
+                    first_name = ?,
+                    middle_name = ?,
+                    last_name = ?,
+                    birth_date = ?,
+                    birth_place = ?,
+                    gender = ?,
+                    student_number = ?,
+                    phone_number = ?,
+                    address = ?,
+                    civil_status = ?,
+                    employment_status = ?,
+                    file_profile_picture = ?,
+                    file_cv = ?,
+                    ver_stat_dean = ?
+                WHERE id = ?
+            ");
+            $statement->execute([
+                $alumni["name_extension"],
+                $alumni["first_name"],
+                $alumni["middle_name"],
+                $alumni["last_name"],
+                $alumni["birth_date"],
+                $alumni["birth_place"],
+                $alumni["gender"],
+                $alumni["student_number"],
+                $alumni["phone_number"],
+                $alumni["address"],
+                $alumni["civil_status"],
+                $alumni["employment_status"],
+                $alumni["file_profile_picture"],
+                $alumni["file_cv"],
+                $alumni["ver_stat_dean"],
+                $id
+            ]);
+            return $statement->rowCount() > 0;
+        } catch (PDOException $e) {
+            error_log($e->getMessage());
+            return null;
+        }
+    }
+
+    public function updateAlumniCareerInfoById($id, array $newCareerInfo)
+    {
+        try {
+            $this->pdo->beginTransaction();
+
+            $statement = $this->pdo->prepare("UPDATE alumni SET employment_status = ? WHERE id = ?");
+            $statement->execute([$newCareerInfo["employment_status"], $id]);
+
+            foreach ($newCareerInfo["occupations"] as $occupation) {
+                if (isset($occupation["id"])) {
+                    $statement = $this->pdo->prepare("UPDATE occupation_statuses SET company = ?, address = ?, start_year = ?, end_year = ?, is_current = ? WHERE id = ?");
+                    $statement->execute([$occupation["company"], $occupation["address"], $occupation["start_year"], $occupation["end_year"], $occupation["is_current"], $occupation["id"]]);
+                } else {
+                    $existingQuery = $this->pdo->prepare("SELECT id FROM occupations WHERE occupation = ?");
+                    $existingQuery->execute([$occupation["occupation"]]);
+                    $existingId = $existingQuery->fetchColumn();
+
+                    if (!$existingId) {
+                        $stmt = $this->pdo->prepare("INSERT INTO occupations (occupation) VALUES (?)");
+                        $stmt->execute([$occupation["occupation"]]);
+                        $existingId = $this->pdo->lastInsertId();
+                    }
+
+                    $statement = $this->pdo->prepare("INSERT INTO occupation_statuses (alumni_id, occupation_id, address, company, start_year, end_year, is_current) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $statement->execute([$id, $existingId, $occupation["address"], $occupation["company"], $occupation["start_year"], $occupation["end_year"], $occupation["is_current"]]);
+                }
+            }
+
+            $this->pdo->commit();
+            return true;
+        } catch (PDOException $e) {
+            $this->pdo->rollback();
+            error_log($e->getMessage());
+            return null;
+        }
     }
 
     public function rejectAlumni($rejection)

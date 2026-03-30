@@ -108,6 +108,10 @@ class Validator
     {
         $msg = $customMsg ?? "{$label} should be a boolean value.";
 
+        if (is_bool($value)) {
+            return $value;
+        }
+
         $trueVals = ["true", "1", "yes", "high"];
         $falseVals = ["false", "0", "no", "low"];
 
