@@ -111,6 +111,7 @@ $router->delete("/api/users/company/vacancy/{id}/delete", [ProfileController::cl
 $router->get("/api/users/alumni/search", [UserController::class, "searchAlumni"]);
 $router->get("/api/users/alumni/{id}/profile", [UserController::class, "viewAlumniProfile"]);
 $router->get("/api/users/alumni/posts/search", [JobPostController::class, "searchAsAlumni"]);
+$router->get("/api/users/alumni/posts/{id}/full", [JobPostController::class, "getFullById"]);
 $router->get("/api/users/alumni/{id}/rejection-appeals", [ProfileController::class, "getAlumniRejectionAppeals"]);
 $router->patch("/api/users/alumni/{id}/enable", [UserController::class, "enableAlumni"]);
 $router->patch("/api/users/alumni/{id}/disable", [UserController::class, "disableAlumni"]);

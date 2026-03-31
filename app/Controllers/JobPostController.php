@@ -98,6 +98,19 @@ class JobPostController
         Response::json(["message" => "Job has been successfully posted."], 201);
     }
 
+    public function getFullById($id)
+    {
+        $cUser = UserGuard::run($this->pdo, [Role::ALUMNI]);
+        $id = Validator::validateInteger("id", $id);
+        $post = $this->model->getFullById($id);
+
+        if (!$post) {
+            Response::json(["message" => "Post not found"], 404);
+        }
+
+        Response::json($post);
+    }
+
     public function searchAsCompany()
     {
         $cUser = UserGuard::run($this->pdo, [Role::COMPANY]);
